@@ -1,0 +1,13 @@
+#Exclude all
+
+*
+!*/
+!.gitignore
+
+#Include
+!*.a80
+!*.asm
+!*.ch6
+!README.md
+
+

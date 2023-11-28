@@ -1,0 +1,2978 @@
+	MODULE 	setup
+	DEVICE 	ZXSPECTRUM48
+//	OUTPUT	setup.cde
+	
+;███████████████ V A R I A B L E S ██████████████████████████████████████		
+DMA 		equ #0B
+ULA			equ #FE
+ZXi_port0	equ #783B
+ZXi_port1	equ #793B
+ZXi_port2	equ #7A3B
+ZXi_port3	equ #7B3B
+ZXi_port4	equ #7C3B
+ZXi_port5	equ #7D3B
+ZXi_port6	equ #7E3B
+ZXi_port7	equ #7F3B
+
+g_ZXi_port0	equ #7C3B
+g_ZXi_port1	equ #7D3B
+
+u_ZXi_port0 equ #FC3B
+u_ZXi_port1 equ #FD3B
+
+CodeStart	equ #0000
+;███████████████ M A I N  C O D E ███████████████████████████████████████	
+			org 49152		
+maincode
+			DISP CodeStart
+setup		di
+			ld sp,0
+			im 1
+;			ld	a, #C3				; Z80DMA command: WR6: Reset
+;			out	(DMA), a
+			xor	a
+			ld	i, a
+			jr boot2
+			db "LMN128"
+//WARNING max #38 bytes!!!!			
+endboot		BLOCK CodeStart+#38-endboot,0
+;			DISP #38
+im1			ei
+			ret					
+boot2
+
+endramtest	ld hl,ramcodeinrom
+			ld de,ramcode
+			ld bc,endramcode-ramcode
+			ldir
+			jp ramcode
+
+ramcodeinrom	
+
+			ent						; restore address to compile to right place
+ramcode		
+			di						; for sna test
+			ld sp,0					; for sna test
+			
+			// Setup keyboard first part
+/*			ld bc,u_ZXi_port0		;Uno
+			ld a,4					;SCANCODE reg_number
+			out (c),a
+			inc b
+			ld a,#FF				;reset keyboard
+			out (c),a*/
+
+			//CPU speed set to 7MHz
+			ld bc,ZXi_port0			//ZXi portselect
+			ld a,#30				//CPU speed
+			out (c),a
+			ld bc,ZXi_port1	
+			ld a,#01				//7 MHz	
+			out (c),a
+
+			xor a
+			out (ULA),a
+
+			ld	hl, 5AFFh
+			ld	de, 5AFEh
+			ld	bc, 1AFFh
+			ld	(hl), a
+			lddr					; Clear	videoram (black	screen)	
+			ld   a,7
+			ld   HL,22528
+			ld   DE,22529
+			ld   BC,767
+			ld   (HL),a
+			ldir
+			ld hl, STRIPS
+			ld bc,#0000
+			ld	(txy32.cursor),bc
+			call txy32.txy
+
+;carymary         
+			 ld bc,#0600
+			 ld de,#06f6
+			 call draw_jugo.DRAW
+		
+			ld	bc,#081E
+			ld	(txy51.cursor),bc
+			ld	hl,TEXT1
+			call txy51.txy
+			
+			
+//carymary2
+			LD HL, STRIPS
+			ld bc,#1700
+			ld	(txy32.cursor),bc			
+			call txy32.txy
+			ld bc,#1100
+			ld de,#11F6
+			call draw_jugo.DRAW		
+// third line
+//			LD HL, STRIPS
+//			ld bc,#7800
+//			ld	(txy32.cursor),bc			
+//			call txy32.txy
+//			ld bc,#7C00
+//			ld de,#7CF6
+//			call draw_jugo.DRAW		
+
+			xor a					//backup MB02+ port #17
+			in a,(17)
+			ld (back17+1),a
+			xor a
+			out (#17),a
+
+			ld bc,ZXi_port0			//ZXi portselect
+			ld a,#01				//Storage/Memory Interface
+			out (c),a
+			ld bc,ZXi_port1	
+			ld a,#FF				//Ultimate mode	
+			out (c),a
+
+			xor a
+			ld bc,g_ZXi_port0
+			out (c),a
+			in a,(c)
+			ld (back_g_zxi_000+1),a		//backup g_zxi_000 - Device select
+			inc b
+			ld a,#01
+			out (c),a  					//select 1 - internal device - eLeMeNt ZX
+
+			ld a,#E0					//FRAM active read olny
+			out (#53),a
+
+
+//info+logo
+refresh_info
+			ld de,#1000
+	    	ld hl,element_logo
+			call sprite2.OK
+			ld	bc,#AE01
+			ld	(txy51.cursor),bc
+			ld	hl,TEXT0
+			call txy51.txy
+
+			ld	bc,#2044
+			ld	(txy51.cursor),bc
+			ld	hl,ADVS0
+			call txy51.txy			
+			ld hl,#3FFF
+			ld e,(hl)
+			dec hl
+			ld a,(hl)
+			or e
+			ld hl,LEVEL7
+			jr nz, userlevel
+			ld a,(#3FFD)
+			sla a
+			ld hl,LEVEL6
+			jr c, userlevel
+			sla a
+			ld hl,LEVEL5
+			jr c, userlevel
+			sla a
+			ld hl,LEVEL4
+			jr c, userlevel
+			sla a
+			ld hl,LEVEL3
+			jr c, userlevel
+			sla a
+			ld hl,LEVEL2
+			jr c, userlevel
+			sla a
+			ld hl,LEVEL1
+			jr c, userlevel
+			ld hl,LEVEL0
+userlevel	call txy51.txy				
+			
+			ld	bc,#3049
+			ld	(txy51.cursor),bc
+			ld	hl,ADVS1
+			call txy51.txy
+
+			ld hl,#3FFC
+			ld de,xdec_06.zzbin
+			ld bc,4
+			ldir
+			call xdec_06.bindec
+			ld b,10
+			ld c," "
+			ld hl,xdec_06.zzdec
+1			ld a,(hl)
+			add a,"0"
+			cp "0"
+			jr nz,3F
+			ld a,c			
+			jr 2F
+3			ld c,"0"			
+2			push hl
+			push bc
+			call txy51.xy
+			pop bc
+			pop hl
+			inc hl
+			djnz 1B
+
+			ld	bc,#3849
+			ld	(txy51.cursor),bc
+			ld	hl,ADVS2
+			call txy51.txy
+
+			ld hl,#3FF8
+			ld de,xdec_06.zzbin
+			ld bc,4
+			ldir
+			call xdec_06.bindec
+			ld b,10
+			ld c," "
+			ld hl,xdec_06.zzdec
+1			ld a,(hl)
+			add a,"0"
+			cp "0"
+			jr nz,3F
+			ld a,c			
+			jr 2F
+3			ld c,"0"			
+2			push hl
+			push bc
+			call txy51.xy
+			pop bc
+			pop hl
+			inc hl
+			djnz 1B
+
+			ld	bc,#4049
+			ld	(txy51.cursor),bc
+			ld	hl,ADVS3
+			call txy51.txy
+
+			ld hl,#3FF4
+			ld de,xdec_06.zzbin
+			ld bc,4
+			ldir
+			call xdec_06.bindec
+			ld b,10
+			ld c," "
+			ld hl,xdec_06.zzdec
+1			ld a,(hl)
+			add a,"0"
+			cp "0"
+			jr nz,3F
+			ld a,c			
+			jr 2F
+3			ld c,"0"			
+2			push hl
+			push bc
+			call txy51.xy
+			pop bc
+			pop hl
+			inc hl
+			djnz 1B
+
+			ld	bc,#4849
+			ld	(txy51.cursor),bc
+			ld	hl,ADVS4
+			call txy51.txy
+
+			ld hl,#3FF0
+			ld de,xdec_06.zzbin
+			ld bc,4
+			ldir
+			call xdec_06.bindec
+			ld b,10
+			ld c," "
+			ld hl,xdec_06.zzdec
+1			ld a,(hl)
+			add a,"0"
+			cp "0"
+			jr nz,3F
+			ld a,c			
+			jr 2F
+3			ld c,"0"			
+2			push hl
+			push bc
+			call txy51.xy
+			pop bc
+			pop hl
+			inc hl
+			djnz 1B
+
+			ld	bc,#5049
+			ld	(txy51.cursor),bc
+			ld	hl,ADVS5
+			call txy51.txy
+
+			ld hl,#3FEC
+			ld de,xdec_06.zzbin
+			ld bc,4
+			ldir
+			call xdec_06.bindec
+			ld b,10
+			ld c," "
+			ld hl,xdec_06.zzdec
+1			ld a,(hl)
+			add a,"0"
+			cp "0"
+			jr nz,3F
+			ld a,c			
+			jr 2F
+3			ld c,"0"			
+2			push hl
+			push bc
+			call txy51.xy
+			pop bc
+			pop hl
+			inc hl
+			djnz 1B
+			;Core Time Stamp FULL
+			ld	bc,#683C
+			ld	(txy51.cursor),bc
+			ld	hl,COREFW1
+			call txy51.txy
+			ld	bc,#6872
+			ld	(txy51.cursor),bc
+			ld	hl,COREFW2
+			call txy51.txy
+			ld	bc,#687C
+			ld	(txy51.cursor),bc
+			ld a,#FE
+1			ld bc,ZXi_port0
+			out (c),a
+			ld bc,ZXi_port1
+			ld h,0
+			in l,(c)
+			push af			
+			call NUMBER1
+			pop af
+			dec a
+			cp #F8
+			jr nz, 1B
+			//SetUp date version
+			ld	bc,#6042
+			ld	(txy51.cursor),bc
+			ld	hl,STVER
+			call txy51.txy
+			ld	bc,#608A
+			ld	(txy51.cursor),bc
+			ld	hl,DATE
+			call txy51.txy
+			// Setup keyboard second part
+/*			ld bc,u_ZXi_port0		;Uno
+			ld a,#4					;SCANCODE reg_number
+			out (c),a
+			inc b
+			ld e,100				;max 1s (run on 7MHz)
+1			in a,(c)
+			cp #AA					
+			jr z,2F					;BAT keyboard initial test OK
+			ld hl,#0B00				;~70000T
+			call wait.wait
+			in	a, (254)
+			cpl
+			and	1Fh
+			jr  nz,3F				;if press any key skip
+			dec e
+			jr nz,1B
+			jr 3F
+2			ld a,#F6				;Keyboard - set default parameters
+			out (c),a
+			ld hl,#4000
+			call wait.wait
+			ld a,#ED 				;Keyboard - set LED
+			out (c),a
+			ld hl,#2000
+			call wait.wait
+			ld a,#02 				;Keyboard - set LED - Num lock on
+			out (c),a*/
+
+// basic WiFi setup
+			ld bc,ZXi_port0			//ZXi portselect
+			ld a,#39				//Expansion pack B - WiFi/PS2 slave
+			out (c),a
+			inc b
+			in a,(c)
+			or a					//not send to internal USB-UART
+			jr z,3F
+			ex af,af'
+			ld a,#01				//MB03+ mode
+			out (c),a
+
+			ld bc,#133B				; wifi ZXi TX port
+			ld hl,wifistring
+1						
+wfbusy		
+			in a,(c)
+			bit 1,a					
+			jr nz,wfbusy					
+			
+			ld a,(hl)			//test end of string
+			or a
+			jr z,2F
+			out (c),a
+			inc hl	
+			jr 1B
+wifistring  db "AT+CWAUTOCONN=1",13,10  //some zxuno sw set it to 0 and AP doesn't connect to wifi after reset
+			db "AT+RST",13,10
+			db 0
+2			ld bc,ZXi_port0			//ZXi portselect
+			ld a,#39				//Expansion pack B - WiFi/PS2 slave
+			out (c),a
+			inc b
+			ex af,af'
+			out (c),a				//back previosu value
+
+
+3			call iinkey.ANYKEY
+			cp "D"
+			jp z,diag
+			cp "r"
+			jr nz,1F
+			call clean
+			jp refresh_info
+//setup
+1			ld a,#01
+			ld bc,ZXi_port0				//ZXi portselect
+			out (c),a
+			ld a,#FF
+			ld bc,ZXi_port1			
+			out (c),a
+			ld a,#E2				//FRAM active/write Area 1
+			out (#53),a	
+
+chn_reg		call clean
+			ld	bc,#B000
+			ld	(txy51.cursor),bc
+			ld	hl,TEXT2
+			call txy51.txy
+			ld	bc,#B800
+			ld	(txy51.cursor),bc
+			ld	hl,TEXT3
+			call txy51.txy
+num_reg		ld a,0
+get_reg		ld hl, REG_TAB
+			sla a
+			sla a
+			sla a
+			ld e,a
+			ld d,0
+			add hl,de
+			ld a,(hl)
+			ld (MOD1+1),a			
+			inc hl
+			ld a,(hl)
+			ld (MOD1+2),a
+			inc hl
+			ld a,(hl)
+			ld (mode_mod+1),a  			//mode
+			inc hl
+			ld a,(hl)
+			ld (max_cur+1),a
+			inc hl
+			ld a,(hl)			//get adress for set call
+			ld (set_call+1),a
+			ld (set_call1+1),a			
+			inc hl
+			ld a,(hl)
+			ld (set_call+2),a
+			ld (set_call1+2),a
+			inc hl
+			ld a,(hl)			//get fram address
+			ld (fram_add+1),a			
+			inc hl
+			ld a,(hl)
+			ld (fram_add+2),a
+MOD1		call 0
+			ld (show_cur+1),a
+new_cur
+			ld hl, DESELECT
+			ld bc,#20F0
+			ld	(txy32.cursor),bc
+			
+			call txy32.txy
+			
+fram_add	ld a,(#FFFF)
+//			ld (show_cur+1),a
+
+			ld h,0
+			ld l,a			
+
+			ld	bc,#20E9
+			ld	(txy51.cursor),bc
+			call NUMBER2
+
+
+show_cur	ld a,0
+max_cur		cp 0
+			jr nc,1F 				//mimo rozsah
+			ld hl, DESELECT
+del_cur		ld bc,#3000
+			ld	(txy32.cursor),bc
+			push af
+			call txy32.txy
+			pop af
+			sla a
+			sla a
+			sla a
+			ld	hl,#3006
+			add a,h
+			ld b,a
+			ld c,l
+			ld	(txy51.cursor),bc
+			ld	hl,SELECT
+			push bc
+			call txy51.txy
+			pop af
+			
+			ld (del_cur+2),a
+1
+
+loopkey		
+1
+			call iinkey.ANYKEY		; waiting for key
+			cp "D"
+			jp z,diag
+
+1			cp "5"					//left
+			jr nz,1F
+2			ld a,(num_reg+1)
+			dec a
+			cp 255
+			jr nz,3F
+			ld a,reg_number-1
+3			ld (num_reg+1),a
+			jp chn_reg
+1			cp 8					//left
+			jr z,2B
+
+			cp "8"					//right
+			jr nz,1F
+2			ld a,(num_reg+1)
+			inc a
+			cp reg_number				
+			jr nz,3F
+			xor a
+3			ld (num_reg+1),a
+			jp chn_reg	
+1			cp 9					//right
+			jr z,2B
+
+			cp "6"					//down
+			jr nz,1F
+2			ld a, (max_cur+1)
+			ld e,a
+			ld a, (show_cur+1)
+			inc a
+			cp e
+			jr z,loopkey
+			ld (show_cur+1),a
+			jp mode0
+1			cp 10					//down
+			jr z,2B			
+
+			cp "7"					//up
+			jr nz,1F
+2			ld a, (show_cur+1)
+			dec a
+			cp 255
+			jr z,loopkey
+			ld (show_cur+1),a
+			jr mode0
+1			cp 11					//up
+			jr z,2B	
+
+			cp 13
+			jr nz,1F
+			ld a,(mode_mod+1)
+			and a
+			jr z,loopkey
+set_call1	call 0    //mode1 call
+			jp chn_reg					
+
+1			cp "L"
+			jp nz,1F
+			ld hl,defaults
+			ld de,#2000
+			ld b,#00
+			ld c,(hl)	
+		    inc hl
+			ldir
+			jr restart			
+
+1			cp "R"					//save and reset
+			jp nz, loopkey
+restart		
+			ld a,(#2030)			//read e_zxi_030 - CPU speed
+			push af
+			ld a,(#2001)			//read e_zxi_001 - Storage/Memory Interface
+			push af
+			xor a
+			out (#07),a
+			out (#27),a
+			out (#67),a
+			inc a
+			out (#47),a
+			dec a			
+			out (#53),a
+			
+
+			xor a
+			ld bc,g_ZXi_port0
+			out (c),a
+back_g_zxi_000	ld a,#01 			//restore internal/external device - modify by code
+			out (c),a  
+
+			ld bc,ZXi_port0			
+			ld a,#01
+			out (c),a
+			pop af
+			inc b		
+			out (c),a				//restore e_zxi_001
+
+			ld bc,ZXi_port0			
+			ld a,#30
+			out (c),a
+			inc b
+			pop af
+			out (c),a				//restore e_zxi_030
+
+back17		ld a,0 				//modify by code
+			out (#17),a
+
+			call clean
+			rst 0
+
+mode0
+mode_mod	ld a,0
+			and a	
+			ld a,(show_cur+1)
+set_call	call z,0 	//mode0 call
+			jp new_cur
+;------------------------------
+;HL-HODNOTA
+;TISKNE CISLO TYPU INTEGER
+NUMBER4  ld   de,-10000
+         call NUM_JED
+NUMBER3  ld   de,-1000
+         call NUM_JED
+NUMBER2  ld   de,-100
+         call NUM_JED
+NUMBER1  ld   de,-10
+         call NUM_JED
+NUMBER0  ld   a,l
+         add  a,48
+         jp   txy51.xy
+
+NUM_JED  xor  a
+NUM_JED1 add  hl,de
+         jr   nc,NUM_PRIC
+         inc  a
+         jr   NUM_JED1
+NUM_PRIC sbc  hl,de
+         add  a,48
+         push bc
+         push hl
+         call txy51.xy
+         pop  hl
+         pop  bc
+         ;;inc  c
+         ret
+
+
+clean		ld a,8			//clear place
+			ld hl, 16384+96+0
+			ld de, 16384+96+0+1
+			ld bc,255-96
+1			ld (hl),0
+			push bc
+			ldir
+			pop bc
+			and a
+			sbc hl,bc
+			inc h
+			ld d,h
+			ld e,l
+			inc e
+			dec a
+			jr nz, 1B
+
+			ld hl, 16384+2048
+			ld de, 16384+2048+1
+			ld bc,4095
+			ld (hl),l
+			ldir	
+			ld   a,7
+			ld   HL,22528+(32*3)
+			ld   DE,22529+(32*3)
+			ld   BC,767-(32*3)
+			ld   (HL),a
+			ldir				
+			ret	
+
+MACH		ld	bc,#2003
+			ld	(txy51.cursor),bc
+			ld	hl,MACH1
+			call txy51.txy
+			ld	bc,#3010
+			ld	(txy51.cursor),bc
+			ld	hl,MACH2
+			call txy51.txy
+			ld	bc,#3810
+			ld	(txy51.cursor),bc
+			ld	hl,MACH3
+			call txy51.txy
+			ld	bc,#4010
+			ld	(txy51.cursor),bc
+			ld	hl,MACH5
+			call txy51.txy
+			ld	bc,#4810
+			ld	(txy51.cursor),bc
+			ld	hl,MACH7
+			call txy51.txy
+			ld	bc,#5010
+			ld	(txy51.cursor),bc
+			ld	hl,MACH8
+			call txy51.txy
+			ld	bc,#5810
+			ld	(txy51.cursor),bc
+			ld	hl,MACH9
+			call txy51.txy
+			ld	bc,#6010
+			ld	(txy51.cursor),bc
+			ld	hl,MACHA
+			call txy51.txy
+
+			ld hl, (fram_add+1)
+			ld a,(hl)
+			ex af,af'
+			ld a,(max_cur+1)
+			ld b,a
+			ex af,af'
+			ld hl,MACH_VAL
+			call cur_num
+			ret
+
+mach_set	ld hl,MACH_VAL
+			ld d,0
+			ld e,a
+			add hl,de
+			ld a, (HL)
+			push af
+			ld hl, (fram_add+1)
+			ld (hl),a
+			ld bc, ZXi_port0
+			ld a,#00
+			out (c),a
+			inc b
+			pop af
+			out (c),a
+
+			ret
+						
+MACH_VAL	db 0,1,3,5,6,7,8,0	
+
+IN			ld	bc,#2003
+			ld	(txy51.cursor),bc
+			ld	hl,IN1
+			call txy51.txy
+			ld	bc,#3010
+			ld	(txy51.cursor),bc
+			ld	hl,IN2
+			call txy51.txy
+			ld	bc,#3810
+			ld	(txy51.cursor),bc
+			ld	hl,IN3
+			call txy51.txy
+			ld	bc,#4010
+			ld	(txy51.cursor),bc
+			ld	hl,IN4		
+			call txy51.txy
+
+			ld hl, (fram_add+1)
+			ld a,(hl)
+			ex af,af'
+			ld a,(max_cur+1)
+			ld b,a
+			ex af,af'
+			ld hl,IN_VAL
+			call cur_num
+			ret
+
+in_set		ld hl,IN_VAL
+			ld d,0
+			ld e,a
+			add hl,de
+			ld a, (HL)
+			push af
+			ld hl, (fram_add+1)
+			ld (hl),a
+			ld bc, ZXi_port0
+			ld a,#01		//ZXiport
+			out (c),a   
+			inc b
+			pop af
+//no change interface to avoid dissable Ultimate mode			out (c),a
+
+			ret
+						
+IN_VAL		db 0,1,2,3,4,5,6
+AUDIO
+			ld	bc,#2003
+			ld	(txy51.cursor),bc
+			ld	hl,AUDIO1
+			call txy51.txy
+			ld	bc,#3010
+			ld	(txy51.cursor),bc
+			ld	hl,AUDIO2
+			call txy51.txy
+			ld	bc,#3810
+			ld	(txy51.cursor),bc
+			ld	hl,AUDIO3
+			call txy51.txy
+			ld	bc,#4010
+			ld	(txy51.cursor),bc
+			ld	hl,AUDIO4
+			call txy51.txy
+			ld	bc,#4810
+			ld	(txy51.cursor),bc
+			ld	hl,AUDIO5
+			call txy51.txy
+			ld	bc,#5010
+			ld	(txy51.cursor),bc
+			ld	hl,AUDIO6
+			call txy51.txy
+			ld	bc,#5810
+			ld	(txy51.cursor),bc
+			ld	hl,AUDIO7
+			call txy51.txy
+			
+			ld hl, (fram_add+1)			
+			ld a,(max_cur+1)
+			ld e,a
+			ld a,(hl)
+			ld	bc,#30F3
+2			ld	(txy51.cursor),bc
+			rrca
+			push af
+			ld a, "0"
+			jr nc,1F
+			inc a
+1			
+			push bc
+			push hl
+			push de
+			call txy51.xy
+			pop de
+			pop hl
+			pop bc
+			ld a,8
+			add a,b
+			ld b,a
+			inc hl
+			pop af
+			dec e
+			jr nz, 2B
+			xor a
+			ret
+
+audio_set	ld a,(show_cur+1)
+			inc a
+			ld b,a
+			ld a,%10000000
+1			rlc a
+			djnz 1B
+			ld hl, (fram_add+1)
+			xor (hl)
+			ld (hl),a
+			push af
+			ld bc, ZXi_port0
+			ld a,#02
+			out (c),a
+			inc b
+			pop af
+			out (c),a
+			ret		
+
+JOY			ld	bc,#2003
+			ld	(txy51.cursor),bc
+			ld	hl,JOY1
+			call txy51.txy
+			ld	bc,#3010
+			ld	(txy51.cursor),bc
+			ld	hl,JOY2
+			call txy51.txy
+			ld	bc,#3810
+			ld	(txy51.cursor),bc
+			ld	hl,JOY3
+			call txy51.txy
+			ld	bc,#4010
+			ld	(txy51.cursor),bc
+			ld	hl,JOY4
+			call txy51.txy
+			ld	bc,#4810
+			ld	(txy51.cursor),bc
+			ld	hl,JOY5
+			call txy51.txy
+			ld	bc,#5010
+			ld	(txy51.cursor),bc
+			ld	hl,JOY6
+			call txy51.txy
+			ld	bc,#5810
+			ld	(txy51.cursor),bc
+/*			ld	hl,JOY7
+			call txy51.txy
+			ld	bc,#6010
+			ld	(txy51.cursor),bc
+			ld	hl,JOY8
+			call txy51.txy	*/
+			ld hl, (fram_add+1)
+			ld a,(hl)
+			ex af,af'
+			ld a,(max_cur+1)
+			ld b,a
+			ex af,af'
+			ld hl,JOY_VAL
+			call cur_num
+			ret
+
+joy_set		ld hl,JOY_VAL
+			ld d,0
+			ld e,a
+			add hl,de
+			ld a, (HL)
+			push af
+			ld hl, (fram_add+1)
+			ld (hl),a
+			ld bc, ZXi_port0
+			ld a,3
+			out (c),a
+			inc b
+			pop af
+			out (c),a
+
+			ret
+		
+JOY_VAL		db 0,1,2,3,4,5,6,7
+
+PAD			ld	bc,#2003
+			ld	(txy51.cursor),bc
+			ld	hl,PAD1
+			call txy51.txy
+			ld	bc,#3010
+			ld	(txy51.cursor),bc
+			ld	hl,PAD2
+			call txy51.txy
+			ld	bc,#3810
+			ld	(txy51.cursor),bc
+			ld	hl,PAD3
+			call txy51.txy
+			
+			ld hl, (fram_add+1)
+			ld a,(hl)
+			ex af,af'
+			ld a,(max_cur+1)
+			ld b,a
+			ex af,af'
+			ld hl,PAD_VAL
+			call cur_num
+			ret
+
+pad_set		ld hl,PAD_VAL
+			ld d,0
+			ld e,a
+			add hl,de
+			ld a, (HL)
+			push af
+			ld hl, (fram_add+1)
+			ld (hl),a
+			ld bc, ZXi_port0
+			ld a,#1A
+			out (c),a
+			inc b
+			pop af
+			out (c),a
+
+			ret
+		
+PAD_VAL		db 0,1,2,3
+
+
+MMC
+			ld	bc,#2003
+			ld	(txy51.cursor),bc
+			ld	hl,MMC1
+			call txy51.txy
+			ld	bc,#3010
+			ld	(txy51.cursor),bc
+			ld	hl,MMC2
+			call txy51.txy
+						
+			ld hl, (fram_add+1)			
+			ld a,(max_cur+1)
+			ld e,a
+			ld a,(hl)
+			ld	bc,#30F3
+2			ld	(txy51.cursor),bc
+			rrca
+			push af
+			ld a, "0"
+			jr nc,1F
+			inc a
+1			
+			push bc
+			push hl
+			push de
+			call txy51.xy
+			pop de
+			pop hl
+			pop bc
+			ld a,8
+			add a,b
+			ld b,a
+			inc hl
+			pop af
+			dec e
+			jr nz, 2B
+			xor a
+			ret
+
+mmc_set		ld a,(show_cur+1)
+			inc a
+			ld b,a
+			ld a,%10000000
+1			rlc a
+			djnz 1B
+			ld hl, (fram_add+1)
+			xor (hl)
+			ld (hl),a
+			push af
+			ld bc, ZXi_port0
+			ld a,#06
+			out (c),a
+			inc b
+			pop af
+			out (c),a
+			ret	
+
+		
+
+DVO
+			ld	bc,#2003
+			ld	(txy51.cursor),bc
+			ld	hl,DVO1
+			call txy51.txy
+			ld	bc,#3010
+			ld	(txy51.cursor),bc
+			ld	hl,DVO2
+			call txy51.txy
+			ld	bc,#3810
+			ld	(txy51.cursor),bc
+			ld	hl,DVO3
+			call txy51.txy
+/*			ld	bc,#4010
+			ld	(txy51.cursor),bc
+			ld	hl,DVO4
+			call txy51.txy*/
+			ld hl, (fram_add+1)
+			
+			ld a,(max_cur+1)
+			ld e,a
+			ld a,(hl)
+			ld	bc,#30F3
+2			ld	(txy51.cursor),bc
+			rrca
+			push af
+			ld a, "0"
+			jr nc,1F
+			inc a
+1			
+			push bc
+			push hl
+			push de
+			call txy51.xy
+			pop de
+			pop hl
+			pop bc
+			ld a,8
+			add a,b
+			ld b,a
+			inc hl
+			pop af
+			dec e
+			jr nz, 2B
+			xor a
+			ret
+
+dvo_set		ld a,(show_cur+1)
+			inc a
+			ld b,a
+			ld a,%10000000
+1			rlc a
+			djnz 1B
+			ld hl, (fram_add+1)
+			xor (hl)
+			ld (hl),a
+			push af
+			ld bc, ZXi_port0
+			ld a,#1F
+			out (c),a
+			inc b
+			pop af
+			out (c),a
+			ret		
+
+DVE			ld	bc,#2003
+			ld	(txy51.cursor),bc
+			ld	hl,DVE1
+			call txy51.txy
+			ld	bc,#3010
+			ld	(txy51.cursor),bc
+			ld	hl,DVE2
+			call txy51.txy
+			ld	bc,#3810
+			ld	(txy51.cursor),bc
+			ld	hl,DVE3
+			call txy51.txy
+			ld	bc,#4010
+			ld	(txy51.cursor),bc
+			ld	hl,DVE4
+			call txy51.txy
+			ld	bc,#4810
+			ld	(txy51.cursor),bc
+			ld	hl,DVE5
+			call txy51.txy
+/*			ld	bc,#5010
+			ld	(txy51.cursor),bc
+			ld	hl,DVE6
+			call txy51.txy*/
+
+			ld hl, (fram_add+1)
+			ld a,(hl)
+			ex af,af'
+			ld a,(max_cur+1)
+			ld b,a
+			ex af,af'
+			ld hl,DVE_VAL
+			call cur_num
+			ret
+
+dve_set		ld hl,DVE_VAL
+			ld d,0
+			ld e,a
+			add hl,de
+			ld a, (HL)
+			push af
+			ld hl, (fram_add+1)
+			ld (hl),a
+			ld bc, ZXi_port0
+			ld a,#1D
+			out (c),a
+			inc b
+			pop af
+			out (c),a
+
+			ret
+		
+DVE_VAL		db 0,1,2,3,4,5,6,7,8,9
+
+DVT
+			ld	bc,#2003
+			ld	(txy51.cursor),bc
+			ld	hl,DVT1
+			call txy51.txy
+			ld	bc,#3010
+			ld	(txy51.cursor),bc
+			ld	hl,DVT2
+			call txy51.txy
+						
+			ld hl, (fram_add+1)
+			
+			ld a,(max_cur+1)
+			ld e,a
+			ld a,(hl)
+			ld	bc,#30F3
+2			ld	(txy51.cursor),bc
+			rrca
+			push af
+			ld a, "0"
+			jr nc,1F
+			inc a
+1			
+			push bc
+			push hl
+			push de
+			call txy51.xy
+			pop de
+			pop hl
+			pop bc
+			ld a,8
+			add a,b
+			ld b,a
+			inc hl
+			pop af
+			dec e
+			jr nz, 2B
+			xor a
+			ret
+
+dvt_set		ld a,(show_cur+1)
+			inc a
+			ld b,a
+			ld a,%10000000
+1			rlc a
+			djnz 1B
+			ld hl, (fram_add+1)
+			xor (hl)
+			ld (hl),a
+			push af
+			ld bc, ZXi_port0
+			ld a,#10 	//ZXi register
+			out (c),a
+			inc b
+			pop af
+			out (c),a
+			ret
+
+DVU
+			ld	bc,#2003
+			ld	(txy51.cursor),bc
+			ld	hl,DVU1
+			call txy51.txy
+			ld	bc,#3010
+			ld	(txy51.cursor),bc
+			ld	hl,DVU2
+			call txy51.txy
+			ld	bc,#3810
+			ld	(txy51.cursor),bc
+			ld	hl,DVU3
+			call txy51.txy
+/*			ld	bc,#4010
+			ld	(txy51.cursor),bc
+			ld	hl,DVU4
+			call txy51.txy*/
+			
+			ld hl, (fram_add+1)
+			
+			ld a,(max_cur+1)
+			ld e,a
+			ld a,(hl)
+			ld	bc,#30F3
+2			ld	(txy51.cursor),bc
+			rrca
+			push af
+			ld a, "0"
+			jr nc,1F
+			inc a
+1			
+			push bc
+			push hl
+			push de
+			call txy51.xy
+			pop de
+			pop hl
+			pop bc
+			ld a,8
+			add a,b
+			ld b,a
+			inc hl
+			pop af
+			dec e
+			jr nz, 2B
+			xor a
+			ret
+
+dvu_set		ld a,(show_cur+1)
+			inc a
+			ld b,a
+			ld a,%10000000
+1			rlc a
+			djnz 1B
+			ld hl, (fram_add+1)
+			xor (hl)
+			ld (hl),a
+			push af
+			ld bc, ZXi_port0
+			ld a,#11 	//ZXi register
+			out (c),a
+			inc b
+			pop af
+			out (c),a
+			ret
+
+DVP
+			ld	bc,#2003
+			ld	(txy51.cursor),bc
+			ld	hl,DVP1
+			call txy51.txy
+			ld	bc,#3010
+			ld	(txy51.cursor),bc
+			ld	hl,DVP2
+			call txy51.txy
+			ld	bc,#3810
+			ld	(txy51.cursor),bc
+			ld	hl,DVP3
+			call txy51.txy
+			ld	bc,#4010
+			ld	(txy51.cursor),bc
+			ld	hl,DVP4
+			call txy51.txy
+			ld	bc,#4810
+			ld	(txy51.cursor),bc
+			ld	hl,DVP5
+			call txy51.txy
+			ld	bc,#5010
+			ld	(txy51.cursor),bc
+			ld	hl,DVP6
+			call txy51.txy
+			ld	bc,#5810
+			ld	(txy51.cursor),bc
+			ld	hl,DVP7
+			call txy51.txy
+			ld	bc,#6010
+			ld	(txy51.cursor),bc
+			ld	hl,DVP8
+			call txy51.txy
+			ld	bc,#6810
+			ld	(txy51.cursor),bc
+			ld	hl,DVP9
+			call txy51.txy
+
+			ld hl, (fram_add+1)
+			ld a,(hl)
+			ex af,af'
+			ld a,(max_cur+1)
+			ld b,a
+			ex af,af'
+			ld hl,DVP_VAL
+			call cur_num
+			ret
+
+dvp_set		ld hl,DVP_VAL
+			ld d,0
+			ld e,a
+			add hl,de
+			ld a, (HL)
+			push af
+			ld hl, (fram_add+1)
+			ld (hl),a
+			ld bc, ZXi_port0
+			ld a,#1E
+			out (c),a
+			inc b
+			pop af
+			out (c),a
+
+			ret
+		
+DVP_VAL		db 0,1,2,3,4,5,6,7,8,9	
+
+TSFM
+			ld	bc,#2003
+			ld	(txy51.cursor),bc
+			ld	hl,TSFM1
+			call txy51.txy
+			ld	bc,#3010
+			ld	(txy51.cursor),bc
+			ld	hl,TSFM2
+			call txy51.txy
+			ld	bc,#3810
+			ld	(txy51.cursor),bc
+			ld	hl,TSFM3
+			call txy51.txy
+			
+			ld hl, (fram_add+1)			
+			ld a,(max_cur+1)
+			ld e,a
+			ld a,(hl)
+			ld	bc,#30F3
+2			ld	(txy51.cursor),bc
+			rrca
+			push af
+			ld a, "0"
+			jr nc,1F
+			inc a
+1			
+			push bc
+			push hl
+			push de
+			call txy51.xy
+			pop de
+			pop hl
+			pop bc
+			ld a,8
+			add a,b
+			ld b,a
+			inc hl
+			pop af
+			dec e
+			jr nz, 2B
+			xor a
+			ret
+
+tsfm_set	ld a,(show_cur+1)
+			inc a
+			ld b,a
+			ld a,%10000000
+1			rlc a
+			djnz 1B
+			ld hl, (fram_add+1)
+			xor (hl)
+			ld (hl),a
+			push af
+			ld bc, ZXi_port0
+			ld a,#18
+			out (c),a
+			inc b
+			pop af
+			out (c),a
+			ret		
+
+SID
+			ld	bc,#2003
+			ld	(txy51.cursor),bc
+			ld	hl,SID1
+			call txy51.txy
+			ld	bc,#3010
+			ld	(txy51.cursor),bc
+			ld	hl,SID2
+			call txy51.txy
+			ld	bc,#3810
+			ld	(txy51.cursor),bc
+			ld	hl,SID3
+			call txy51.txy
+			
+			ld hl, (fram_add+1)			
+			ld a,(max_cur+1)
+			ld e,a
+			ld a,(hl)
+			ld	bc,#30F3
+2			ld	(txy51.cursor),bc
+			rrca
+			push af
+			ld a, "0"
+			jr nc,1F
+			inc a
+1			
+			push bc
+			push hl
+			push de
+			call txy51.xy
+			pop de
+			pop hl
+			pop bc
+			ld a,8
+			add a,b
+			ld b,a
+			inc hl
+			pop af
+			dec e
+			jr nz, 2B
+			xor a
+			ret
+
+sid_set	ld a,(show_cur+1)
+			inc a
+			ld b,a
+			ld a,%10000000
+1			rlc a
+			djnz 1B
+			ld hl, (fram_add+1)
+			xor (hl)
+			ld (hl),a
+			push af
+			ld bc, ZXi_port0
+			ld a,#19
+			out (c),a
+			inc b
+			pop af
+			out (c),a
+			ret	
+MICE
+			ld	bc,#2003
+			ld	(txy51.cursor),bc
+			ld	hl,MICE1
+			call txy51.txy
+			ld	bc,#3010
+			ld	(txy51.cursor),bc
+			ld	hl,MICE2
+			call txy51.txy
+			ld	bc,#3810
+			ld	(txy51.cursor),bc
+			ld	hl,MICE3
+			call txy51.txy
+			ld	bc,#4010
+			ld	(txy51.cursor),bc
+			ld	hl,MICE4
+			call txy51.txy
+			ld	bc,#4810
+			ld	(txy51.cursor),bc
+			ld	hl,MICE5
+			call txy51.txy
+			ld	bc,#5010
+			ld	(txy51.cursor),bc
+			ld	hl,MICE6
+			call txy51.txy
+			ld	bc,#5810
+			ld	(txy51.cursor),bc
+			ld	hl,setup.MICE7
+			call txy51.txy
+						
+			ld hl, (fram_add+1)
+			ld a,(hl)
+			ex af,af'
+			ld a,(max_cur+1)
+			ld b,a
+			ex af,af'
+			ld hl,mice_VAL
+			call cur_num
+			ret
+
+mice_set	ld hl,mice_VAL
+			ld d,0
+			ld e,a
+			add hl,de
+			ld a, (HL)
+			push af
+			ld hl, (fram_add+1)
+			ld (hl),a
+			ld bc, ZXi_port0
+			ld a,#04
+			out (c),a
+			inc b
+			pop af
+			out (c),a
+
+			ret
+		
+mice_VAL	db 0,1,2,3,4,5,6
+
+ZCSD
+			ld	bc,#2003
+			ld	(txy51.cursor),bc
+			ld	hl,ZCSD1
+			call txy51.txy
+			ld	bc,#3010
+			ld	(txy51.cursor),bc
+			ld	hl,ZCSD2
+			call txy51.txy
+			ld	bc,#3810
+			ld	(txy51.cursor),bc
+			ld	hl,ZCSD3
+			call txy51.txy
+			ld	bc,#4010
+			ld	(txy51.cursor),bc
+			ld	hl,ZCSD4
+			call txy51.txy
+						
+			ld hl, (fram_add+1)
+			ld a,(hl)
+			ex af,af'
+			ld a,(max_cur+1)
+			ld b,a
+			ex af,af'
+			ld hl,zcsd_VAL
+			call cur_num
+			ret
+
+zcsd_set	ld hl,mice_VAL
+			ld d,0
+			ld e,a
+			add hl,de
+			ld a, (HL)
+			push af
+			ld hl, (fram_add+1)
+			ld (hl),a
+			ld bc, ZXi_port0
+			ld a,#2C
+			out (c),a
+			inc b
+			pop af
+			out (c),a
+
+			ret
+		
+zcsd_VAL	db 0,1,2,3
+
+DIVSD
+			ld	bc,#2003
+			ld	(txy51.cursor),bc
+			ld	hl,DIVSD1
+			call txy51.txy
+			ld	bc,#3010
+			ld	(txy51.cursor),bc
+			ld	hl,DIVSD2
+			call txy51.txy
+			ld	bc,#3810
+			ld	(txy51.cursor),bc
+			ld	hl,DIVSD3
+			call txy51.txy
+/*			ld	bc,#4010
+			ld	(txy51.cursor),bc
+			ld	hl,DVU4
+			call txy51.txy*/
+			
+			ld hl, (fram_add+1)
+			
+			ld a,(max_cur+1)
+			ld e,a
+			ld a,(hl)
+			ld	bc,#30F3
+2			ld	(txy51.cursor),bc
+			rrca
+			push af
+			ld a, "0"
+			jr nc,1F
+			inc a
+1			
+			push bc
+			push hl
+			push de
+			call txy51.xy
+			pop de
+			pop hl
+			pop bc
+			ld a,8
+			add a,b
+			ld b,a
+			inc hl
+			pop af
+			dec e
+			jr nz, 2B
+			xor a
+			ret
+
+divsd_set	ld a,(show_cur+1)
+			inc a
+			ld b,a
+			ld a,%10000000
+1			rlc a
+			djnz 1B
+			ld hl, (fram_add+1)
+			xor (hl)
+			ld (hl),a
+			push af
+			ld bc, ZXi_port0
+			ld a,#2D 	//ZXi register
+			out (c),a
+			inc b
+			pop af
+			out (c),a
+			ret
+
+DMA0
+			ld	bc,#2003
+			ld	(txy51.cursor),bc
+			ld	hl,DMA1
+			call txy51.txy
+			ld	bc,#3010
+			ld	(txy51.cursor),bc
+			ld	hl,DMA2
+			call txy51.txy
+						
+			ld hl, (fram_add+1)
+			
+			ld a,(max_cur+1)
+			ld e,a
+			ld a,(hl)
+			ld	bc,#30F3
+2			ld	(txy51.cursor),bc
+			rrca
+			push af
+			ld a, "0"
+			jr nc,1F
+			inc a
+1			
+			push bc
+			push hl
+			push de
+			call txy51.xy
+			pop de
+			pop hl
+			pop bc
+			ld a,8
+			add a,b
+			ld b,a
+			inc hl
+			pop af
+			dec e
+			jr nz, 2B
+			xor a
+			ret
+
+dma_set		ld a,(show_cur+1)
+			inc a
+			ld b,a
+			ld a,%10000000
+1			rlc a
+			djnz 1B
+			ld hl, (fram_add+1)
+			xor (hl)
+			ld (hl),a
+			push af
+			ld bc, ZXi_port0
+			ld a,#2E	//ZXi register
+			out (c),a
+			inc b
+			pop af
+			out (c),a
+			ret			
+
+EXTS0		ld	bc,#2003
+			ld	(txy51.cursor),bc
+			ld	hl,EXTS1
+			call txy51.txy
+			ld	bc,#3010
+			ld	(txy51.cursor),bc
+			ld	hl,EXTS2
+			call txy51.txy
+			ld	bc,#3810
+			ld	(txy51.cursor),bc
+			ld	hl,EXTS3
+			call txy51.txy
+			ld	bc,#4010
+			ld	(txy51.cursor),bc
+			ld	hl,EXTS4
+			call txy51.txy
+			ld	bc,#4810
+			ld	(txy51.cursor),bc
+			ld	hl,EXTS5
+			call txy51.txy
+			ld	bc,#5010
+			ld	(txy51.cursor),bc
+			ld	hl,EXTS6
+			call txy51.txy
+			ld	bc,#5810
+			ld	(txy51.cursor),bc
+			ld	hl,EXTS7
+			call txy51.txy
+			
+			ld hl, (fram_add+1)
+			ld a,(hl)
+			ex af,af'
+			ld a,(max_cur+1)
+			ld b,a
+			ex af,af'
+			ld hl,exts_VAL
+			call cur_num
+			ret
+
+exts_set	ld hl,exts_VAL
+			ld d,0
+			ld e,a
+			add hl,de
+			ld a, (HL)
+			push af
+			ld hl, (fram_add+1)
+			ld (hl),a
+			ld bc, ZXi_port0
+			ld a,#20
+			out (c),a
+			inc b
+			pop af
+			out (c),a
+
+			ret
+		
+exts_VAL	db 0,1,2,3,4,5,6
+
+EXTL0		ld	bc,#2003
+			ld	(txy51.cursor),bc
+			ld	hl,EXTL1
+			call txy51.txy
+			ld	bc,#3010
+			ld	(txy51.cursor),bc
+			ld	hl,EXTL2
+			call txy51.txy
+			ld	bc,#3810
+			ld	(txy51.cursor),bc
+			ld	hl,EXTL3
+			call txy51.txy
+			
+			ld hl, (fram_add+1)
+			ld a,(hl)
+			ex af,af'
+			ld a,(max_cur+1)
+			ld b,a
+			ex af,af'
+			ld hl,exts_VAL
+			call cur_num
+			ret
+
+extl_set	ld hl,extl_VAL
+			ld d,0
+			ld e,a
+			add hl,de
+			ld a, (HL)
+			push af
+			ld hl, (fram_add+1)
+			ld (hl),a
+			ld bc, ZXi_port0
+			ld a,#21
+			out (c),a
+			inc b
+			pop af
+			out (c),a
+
+			ret
+		
+extl_VAL	db 0,1,2,3,4,5,6,7
+
+LIFO0
+			ld	bc,#2003
+			ld	(txy51.cursor),bc
+			ld	hl,LIFO1
+			call txy51.txy
+			ld	bc,#3010
+			ld	(txy51.cursor),bc
+			ld	hl,LIFO2
+			call txy51.txy
+						
+			ld hl, (fram_add+1)
+			
+			ld a,(max_cur+1)
+			ld e,a
+			ld a,(hl)
+			ld	bc,#30F3
+2			ld	(txy51.cursor),bc
+			rrca
+			push af
+			ld a, "0"
+			jr nc,1F
+			inc a
+1			
+			push bc
+			push hl
+			push de
+			call txy51.xy
+			pop de
+			pop hl
+			pop bc
+			ld a,8
+			add a,b
+			ld b,a
+			inc hl
+			pop af
+			dec e
+			jr nz, 2B
+			xor a
+			ret
+
+lifo_set	ld a,(show_cur+1)
+			inc a
+			ld b,a
+			ld a,%10000000
+1			rlc a
+			djnz 1B
+			ld hl, (fram_add+1)
+			xor (hl)
+			ld (hl),a
+			push af
+			ld bc, ZXi_port0
+			ld a,#2F	//ZXi register
+			out (c),a
+			inc b
+			pop af
+			out (c),a
+			ret			
+
+CPU			ld	bc,#2003
+			ld	(txy51.cursor),bc
+			ld	hl,CPU1
+			call txy51.txy
+			ld	bc,#3010
+			ld	(txy51.cursor),bc
+			ld	hl,CPU2
+			call txy51.txy
+			ld	bc,#3810
+			ld	(txy51.cursor),bc
+			ld	hl,CPU3
+			call txy51.txy
+			ld	bc,#4010
+			ld	(txy51.cursor),bc
+			ld	hl,CPU4
+			call txy51.txy
+			ld	bc,#4810
+			ld	(txy51.cursor),bc
+			ld	hl,CPU5
+			call txy51.txy
+/*			ld	bc,#5010
+			ld	(txy51.cursor),bc
+			ld	hl,CPU6
+			call txy51.txy
+			ld	bc,#5810
+			ld	(txy51.cursor),bc
+			ld	hl,CPU7
+			call txy51.txy
+			ld	bc,#6010
+			ld	(txy51.cursor),bc
+			ld	hl,CPU8
+			call txy51.txy
+			ld	bc,#6810
+			ld	(txy51.cursor),bc
+			ld	hl,CPU9
+			call txy51.txy
+			ld	bc,#7010
+			ld	(txy51.cursor),bc
+			ld	hl,CPUA
+			call txy51.txy
+			ld	bc,#7810
+			ld	(txy51.cursor),bc
+			ld	hl,CPUB
+			call txy51.txy
+			ld	bc,#8010
+			ld	(txy51.cursor),bc
+			ld	hl,CPUC
+			call txy51.txy*/
+
+
+			ld hl, (fram_add+1)
+			ld a,(hl)
+			ex af,af'
+			ld a,(max_cur+1)
+			ld b,a
+			ex af,af'
+			ld hl,CPU_VAL
+			call cur_num
+			ret
+
+CPU_set		ld hl,CPU_VAL
+			ld d,0
+			ld e,a
+			add hl,de
+			ld a, (HL)
+			push af
+			ld hl, (fram_add+1)
+			ld (hl),a
+			ld bc, ZXi_port0
+			ld a,#30
+//			out (c),a
+			inc b
+			pop af
+//			out (c),a
+
+			ret
+		
+CPU_VAL	db 0,1,2,3,4,5,6,7,8,9,#A
+
+CPO
+			ld	bc,#2003
+			ld	(txy51.cursor),bc
+			ld	hl,CPO1
+			call txy51.txy
+			ld	bc,#3010
+			ld	(txy51.cursor),bc
+			ld	hl,CPO2
+			call txy51.txy
+
+			ld	bc,#5003
+			ld	(txy51.cursor),bc
+			ld	hl,CPO3
+			call txy51.txy
+			ld	bc,#6003
+			ld	(txy51.cursor),bc
+			ld	hl,CPO4
+			call txy51.txy
+			ld	bc,#6803
+			ld	(txy51.cursor),bc
+			ld	hl,CPO5
+			call txy51.txy
+			ld	bc,#7003
+			ld	(txy51.cursor),bc
+			ld	hl,CPO6
+			call txy51.txy
+			ld	bc,#8003
+			ld	(txy51.cursor),bc
+			ld	hl,CPO7
+			call txy51.txy
+			ld	bc,#8803
+			ld	(txy51.cursor),bc
+			ld	hl,CPO8
+			call txy51.txy
+						
+			ld hl, (fram_add+1)
+			
+			ld a,(max_cur+1)
+			ld e,a
+			ld a,(hl)
+			ld	bc,#30F3
+2			ld	(txy51.cursor),bc
+			rrca
+			push af
+			ld a, "0"
+			jr nc,1F
+			inc a
+1			
+			push bc
+			push hl
+			push de
+			call txy51.xy
+			pop de
+			pop hl
+			pop bc
+			ld a,8
+			add a,b
+			ld b,a
+			inc hl
+			pop af
+			dec e
+			jr nz, 2B
+			xor a
+			ret
+
+CPO_set		ld a,(show_cur+1)
+			inc a
+			ld b,a
+			ld a,%10000000
+1			rlc a
+			djnz 1B
+			ld hl, (fram_add+1)
+			xor (hl)
+			ld (hl),a
+			push af
+			ld bc, ZXi_port0
+			ld a,#31	//ZXi register
+			out (c),a
+			inc b
+			pop af
+			out (c),a
+			ret	
+
+CPA
+			ld	bc,#2003
+			ld	(txy51.cursor),bc
+			ld	hl,CPA1
+			call txy51.txy
+			ld	bc,#3010
+			ld	(txy51.cursor),bc
+			ld	hl,CPA2
+			call txy51.txy
+			ld	bc,#3810
+			ld	(txy51.cursor),bc
+			ld	hl,CPA3
+			call txy51.txy
+						
+			ld hl, (fram_add+1)
+			
+			ld a,(max_cur+1)
+			ld e,a
+			ld a,(hl)
+			ld	bc,#30F3
+2			ld	(txy51.cursor),bc
+			rrca
+			push af
+			ld a, "0"
+			jr nc,1F
+			inc a
+1			
+			push bc
+			push hl
+			push de
+			call txy51.xy
+			pop de
+			pop hl
+			pop bc
+			ld a,8
+			add a,b
+			ld b,a
+			inc hl
+			pop af
+			dec e
+			jr nz, 2B
+			xor a
+			ret
+
+CPA_set		ld a,(show_cur+1)
+			inc a
+			ld b,a
+			ld a,%10000000
+1			rlc a
+			djnz 1B
+			ld hl, (fram_add+1)
+			xor (hl)
+			ld (hl),a
+			push af
+			ld bc, ZXi_port0
+			ld a,#32	//ZXi register
+			out (c),a
+			inc b
+			pop af
+			out (c),a
+			ret				
+
+EXP			ld	bc,#2003
+			ld	(txy51.cursor),bc
+			ld	hl,EXP1
+			call txy51.txy
+			ld	bc,#3010
+			ld	(txy51.cursor),bc
+			ld	hl,EXP2
+			call txy51.txy
+			ld	bc,#3810
+			ld	(txy51.cursor),bc
+			ld	hl,EXP3
+			call txy51.txy
+			
+			ld hl, (fram_add+1)
+			ld a,(hl)
+			ex af,af'
+			ld a,(max_cur+1)
+			ld b,a
+			ex af,af'
+			ld hl,EXP_VAL
+			call cur_num
+			ret
+
+EXP_set		ld hl,EXP_VAL
+			ld d,0
+			ld e,a
+			add hl,de
+			ld a, (HL)
+			push af
+			ld hl, (fram_add+1)
+			ld (hl),a
+			ld bc, ZXi_port0
+			ld a,#38
+			out (c),a
+			inc b
+			pop af
+			out (c),a
+
+			ret
+		
+EXP_VAL	db 0,1,2,3
+
+EXPB			ld	bc,#2003
+			ld	(txy51.cursor),bc
+			ld	hl,EXPB1
+			call txy51.txy
+			ld	bc,#3010
+			ld	(txy51.cursor),bc
+			ld	hl,EXPB2
+			call txy51.txy
+			ld	bc,#3810
+			ld	(txy51.cursor),bc
+			ld	hl,EXPB3
+			call txy51.txy
+			ld	bc,#4010
+			ld	(txy51.cursor),bc
+			ld	hl,EXPB4
+			call txy51.txy
+			ld	bc,#4810
+			ld	(txy51.cursor),bc
+			ld	hl,EXPB5
+			call txy51.txy
+			ld	bc,#5010
+			ld	(txy51.cursor),bc
+			ld	hl,EXPB6
+			call txy51.txy
+			
+			ld hl, (fram_add+1)
+			ld a,(hl)
+			ex af,af'
+			ld a,(max_cur+1)
+			ld b,a
+			ex af,af'
+			ld hl,EXPB_VAL
+			call cur_num
+			ret
+
+EXPB_set	ld hl,EXPB_VAL
+			ld d,0
+			ld e,a
+			add hl,de
+			ld a, (HL)
+			push af
+			ld hl, (fram_add+1)
+			ld (hl),a
+			ld bc, ZXi_port0
+			ld a,#39
+			out (c),a
+			inc b
+			pop af
+			out (c),a
+
+			ret
+		
+EXPB_VAL	db 0,1,2,3,4,5
+
+FLASH0		ld	bc,#2003
+			ld	(txy51.cursor),bc
+			ld	hl,FLASH1
+			call txy51.txy
+			ld	bc,#3010
+			ld	(txy51.cursor),bc
+			ld	hl,FLASH2
+			call txy51.txy
+			ld	bc,#3810
+			ld	(txy51.cursor),bc
+			ld	hl,FLASH3
+			call txy51.txy
+			ld	bc,#4010
+			ld	(txy51.cursor),bc
+			ld	hl,FLASH4
+			call txy51.txy
+			ld	bc,#4810
+			ld	(txy51.cursor),bc
+			ld	hl,FLASH5
+			call txy51.txy
+					
+			ld hl, (fram_add+1)
+			ld a,(hl)
+			ex af,af'
+			ld a,(max_cur+1)
+			ld b,a
+			ex af,af'
+			ld hl,flash_VAL
+			call cur_num
+			ret
+
+flash_set	ld hl,flash_VAL
+			ld d,0
+			ld e,a
+			add hl,de
+			ld a, (HL)
+			push af
+			ld hl, (fram_add+1)
+			ld (hl),a
+			ld bc, ZXi_port0
+			ld a,#0F
+			out (c),a
+			inc b
+			pop af
+			out (c),a
+
+			ret
+		
+flash_VAL	db 0,1,2,3,4,5
+
+DEBUG0		ld	bc,#2003
+			ld	(txy51.cursor),bc
+			ld	hl,DEBUG1
+			call txy51.txy
+			ld	bc,#3010
+			ld	(txy51.cursor),bc
+			ld	hl,DEBUG2
+			call txy51.txy
+			ld	bc,#3810
+			ld	(txy51.cursor),bc
+			ld	hl,DEBUG3
+			call txy51.txy
+			ld	bc,#4010
+			ld	(txy51.cursor),bc
+			ld	hl,DEBUG31
+			call txy51.txy
+			ld	bc,#4810
+			ld	(txy51.cursor),bc
+			ld	hl,DEBUG32
+			call txy51.txy
+			ld	bc,#5010
+			ld	(txy51.cursor),bc
+			ld	hl,DEBUG4
+			call txy51.txy
+			ld	bc,#5810
+			ld	(txy51.cursor),bc
+			ld	hl,DEBUG5
+			call txy51.txy
+			
+			ld hl, (fram_add+1)
+			ld a,(hl)
+			ex af,af'
+			ld a,(max_cur+1)
+			ld b,a
+			ex af,af'
+			ld hl,debug_VAL
+			call cur_num
+			ret
+
+debug_set	ld hl,debug_VAL
+			ld d,0
+			ld e,a
+			add hl,de
+			ld a, (HL)
+			push af
+			ld hl, (fram_add+1)
+			bit 7,a
+			jr nz, 1F //don't save
+			ld (hl),a
+1			ld bc, ZXi_port0
+			ld a,#3F
+			out (c),a
+			inc b
+			pop af
+			out (c),a
+
+			ret
+		
+debug_VAL	db 0,1,2,3,#FE,#FF
+
+
+cur_num		//a-fram value, hl-value table, b-max_cur //out a-cursor number
+			ld e,a
+			xor a
+1			ex af,af'			
+			ld a,(hl)
+			cp e
+			jr nz,2F
+			ex af,af'
+			ret
+2			inc hl
+			ex af,af'	
+			inc a	
+			djnz 1B
+			xor a // 0 in wrong value
+			ret
+
+defaults    db #40  //number of value for loading defaults
+zxi_000		db #01	//Machine select - ZX128
+zxi_001		db #01	//Storage/Memory interface
+zxi_002		db #1F	//Audio
+zxi_003		db #01	//Joystick - Kempston
+zxi_004		db #03	//Mouse
+zxi_005		db #00	//
+zxi_006		db #00	//
+zxi_007		db #00	//
+zxi_008		db #00	//
+zxi_009		db #00	//
+zxi_00A		db #00	//
+zxi_00B		db #00	//
+zxi_00C		db #00	//
+zxi_00D		db #00	//
+zxi_00E		db #00	//
+zxi_00F		db #00	//FLASH-ROM Area
+zxi_010		db #01	//Timex
+zxi_011		db #01	//ULAplus
+zxi_012		db #01	//DMA
+zxi_013		db #00	//
+zxi_014		db #00	//
+zxi_015		db #00	//
+zxi_016		db #00	//
+zxi_017		db #00	//
+zxi_018		db #00	//TurboSound FM
+zxi_019		db #00	//SID
+zxi_01A		db #00	//JoyPad
+zxi_01B		db #00	//
+zxi_01C		db #00	//
+zxi_01D		db #03	//GigaScreen
+zxi_01E		db #00	//Scan Line
+zxi_01F		db #01	//Digital Video Interface - bit0-DVI legacy
+zxi_020		db #00	//Extra short press
+zxi_021		db #01	//Extra long press
+zxi_022		db #00
+zxi_023		db #00
+zxi_024		db #00
+zxi_025		db #00
+zxi_026		db #00
+zxi_027		db #00
+zxi_028		db #00
+zxi_029		db #00
+zxi_02A		db #00
+zxi_02B		db #00
+zxi_02C		db #00	//Z-Controller
+zxi_02D		db #00	//divSD
+zxi_02E		db #01	//DMA
+zxi_02F		db #01  //LIFO
+zxi_030		db #00	//CPU speed
+zxi_031		db #00	//CPU OverClock
+zxi_032		db #03	//CPU alternative clock change
+zxi_033		db #00
+zxi_034		db #00
+zxi_035		db #00
+zxi_036		db #00
+zxi_037		db #00
+zxi_038		db #00	//Expansion A
+zxi_039		db #00	//Expansion B
+zxi_03A		db #00
+zxi_03B		db #00
+zxi_03C		db #00
+zxi_03D		db #00
+zxi_03E		db #00
+zxi_03F		db #00	//Diagnostic
+
+
+reg_number  equ 26
+REG_TAB
+			dw MACH
+			db 0,7
+			dw mach_set
+			dw #2000 //FRAM address
+
+			dw IN
+			db 0,3
+			dw in_set
+			dw #2001
+			
+			dw CPU
+			db 0,4
+			dw CPU_set
+			dw #2030 
+			
+			dw CPO
+			db 1,1
+			dw CPO_set
+			dw #2031 
+
+			dw CPA //CPU alternative change
+			db 1,2
+			dw CPA_set
+			dw #2032 
+
+			dw JOY
+			db 0,5
+			dw joy_set
+			dw #2003 
+
+			dw PAD
+			db 0,2
+			dw joy_set
+			dw #201A 
+			
+			dw MICE
+			db 0,6
+			dw mice_set
+			dw #2004 
+
+			dw EXTS0
+			db 0,6
+			dw exts_set
+			dw #2020 
+
+			dw EXTL0
+			db 0,2
+			dw extl_set
+			dw #2021
+
+			dw AUDIO
+			db 1,6
+			dw audio_set
+			dw #2002 
+
+			dw TSFM
+			db 1,2
+			dw tsfm_set
+			dw #2018 
+			
+			dw SID
+			db 1,2
+			dw sid_set
+			dw #2019 
+
+/*			dw MMC
+			db 1,1
+			dw mmc_set
+			dw #2006 
+*/
+						
+			dw DVT
+			db 1,1
+			dw dvt_set
+			dw #2010  
+
+			dw DVU
+			db 1,2
+			dw dvu_set
+			dw #2011 
+
+			dw DVE
+			db 0,4
+			dw dve_set
+			dw #201D 
+
+			dw DVP
+			db 0,8
+			dw dvp_set
+			dw #201E 
+
+			dw DVO
+			db 1,2
+			dw dvo_set
+			dw #201F 
+
+			dw DMA0
+			db 1,1
+			dw dma_set
+			dw #202E 
+
+			dw LIFO0
+			db 1,1
+			dw lifo_set
+			dw #202F 
+
+			dw ZCSD
+			db 0,3
+			dw zcsd_set
+			dw #202C 
+
+			dw DIVSD
+			db 1,2
+			dw divsd_set
+			dw #202D
+
+			dw EXP
+			db 0,2
+			dw EXP_set
+			dw #2038 
+			
+			dw EXPB
+			db 0,5
+			dw EXPB_set
+			dw #2039 			
+
+			dw FLASH0
+			db 0,4
+			dw flash_set
+			dw #200F 
+
+			dw DEBUG0
+			db 0,6
+			dw debug_set
+			dw #203F 
+
+; --------------- T E X T---------------------------------------	
+MACH1		db 16,67,"Machine: (Memory/Timing mode)"
+			dc " "
+MACH2		db 16,7,"ZX Spectrum 48"
+			dc " "
+MACH3		db 16,7,"ZX Spectrum 128/+2"
+			dc " "			
+MACH4		db 16,7,"ZX Spectrum 128/+2"
+			dc " "
+MACH5		db 16,7,"ZX Spectrum 128+2A"
+			dc " "
+MACH6		db 16,7,"ZX Spectrum 128+2A"
+			dc " "	
+MACH7		db 16,7,"Pentagon 128"
+			dc " "	
+MACH8		db 16,7,"Pentagon 512"
+			dc " "	
+MACH9		db 16,7,"Pentagon 1024 v2.2"
+			dc " "		
+MACHA		db 16,7,"Pentagon 4096 (KAY/Profi/Scorpion/Phoenix/ATM1)"
+			dc " "	
+MACHB		db 16,7,"ZX Evolution"
+			dc " "														
+
+FLASH1		db 16,67,"Flash/ROM Area (v2)"
+			dc " "
+FLASH2		db 16,7,"Area 0"
+			dc " "
+FLASH3		db 16,7,"Area 1"
+			dc " "
+FLASH4		db 16,7,"Area 2"
+			dc " "
+FLASH5		db 16,7,"Area 3"
+			dc " "			
+
+IN1			db 16,67,"Storage/Memory Interface"
+			dc " "
+IN2			db 16,7,"none (disabled)"
+			dc " "
+IN3			db 16,7,"DivSD    (512KB divSD)"
+			dc " "
+IN4			db 16,7,"DivSD+MB (512KB divSD & MB02+)"
+			dc " "
+
+
+AUDIO1		db 16,67,"Audio output"
+			dc " "
+AUDIO2		db 16,7,"enable ULA audio"
+			dc " "
+AUDIO3		db 16,7,"enable TurboSound FM"
+			dc " "
+AUDIO4		db 16,7,"enable MonsterBlaster DA (SounDrive,...)"
+			dc " "
+AUDIO5		db 16,7,"enable SID"
+			dc " "
+AUDIO6		db 16,7,"enable SAA1099"
+			dc " "
+AUDIO7		db 16,7,"enable TAPE input"
+			dc " "					
+			
+
+JOY1		db 16,67,"Joystick/Gamepad interface mode"
+			dc " "
+JOY2		db 16,7,"none (disabled)"
+			dc " "
+JOY3		db 16,7,"Kempston"
+			dc " "
+JOY4		db 16,7,"Sinclair 1 (left: 12345+mn)"
+			dc " "	
+JOY5		db 16,7,"Sinclair 2 (right:67890+mn)"
+			dc " "					
+JOY6		db 16,7,"Keyboard (OPQASpace+mn+bhr)"
+			dc " "							
+
+MMC1		db 16,67,"SD/MMC"
+			dc " "
+MMC2		db 16,7,"enable"
+			dc " "
+
+DVO1		db 16,67,"Digital Video Interface"
+			dc " "
+DVO2		db 16,7,"enable legacy DVI"
+			dc " "
+DVO3		db 16,7,"enable ULTIMATE sync. - only for some TV"
+			dc " "
+/*DVO4		db 16,7,"HotPlug detection disable (TV/Monitor signal)"
+			dc " "*/
+
+SID1		db 16,67,"SID"
+			dc " "
+SID2		db 16,7,"Chip model: 0-6581, 1-8580"
+			dc " "
+SID3		db 16,7,"Frequency: 0-PAL, 1-NTSC"
+			dc " "		
+
+TSFM1		db 16,67,"TurboSound FM"
+			dc " "
+TSFM2		db 16,7,"Chip model: 0-AY, 1-YM"
+			dc " "							
+TSFM3		db 16,7,"Stereo: 0-ACB, 1-ABC"
+			dc " "
+
+PAD1		db 16,67,"Joystick/GamePad hardware type"
+			dc " "
+PAD2		db 16,7,"Standard 8-bits era"
+			dc " "
+PAD3		db 16,7,"Sega Controller (3-8 buttons)"
+			dc " "
+
+DVE1		db 16,67,"GigaScreen - old TV/Monitor sum colors effect"
+			dc " "
+DVE2		db 16,7,"none (disabled)"
+			dc " "
+DVE3		db 16,7,"GigaScreen mode0: 2 VRAMs always mixed"
+			dc " "
+DVE4		db 16,7,"GigaScreen mode1: two video frames mix"
+			dc " "	
+DVE5		db 16,7,"GigaScreen mode2: autodetect mode1"
+			dc " "
+DVE6		db 16,7,"GigaScreen mode3: KeyLayer"
+			dc " "			
+
+DVT1		db 16,67,"TIMEX graphics modes"
+			dc " "
+DVT2		db 16,7,"enable TIMEX gfx modes"
+			dc " "
+
+DVU1		db 16,67,"ULAplus"
+			dc " "
+DVU2		db 16,7,"enable ULAplus palettes"
+			dc " "
+DVU3		db 16,7,"enable TIMEX mode select by ULAplus regs"	
+			dc " "
+/*DVU4		db 16,7,"enable SLAM+ slow ports (not implemented)"	
+			dc " "	*/
+
+DVP1		db 16,67,"Scan line (old CRT/TV) effect"
+			dc " "
+DVP2		db 16,7,"none (disabled)"
+			dc " "
+DVP3		db 16,7,"1/2"	
+			dc " "
+DVP4		db 16,7,"1/4"	
+			dc " "	
+DVP5		db 16,7,"1/8"	
+			dc " "
+DVP6		db 16,7,"1/16"	
+			dc " "
+DVP7		db 16,7,"1/32"	
+			dc " "
+DVP8		db 16,7,"1/64"	
+			dc " "
+DVP9		db 16,7,"1/128"	
+			dc " "																			
+
+CPU1		db 16,67,"CPU speed"
+			dc " "
+CPU2		db 16,7,"3.5 MHz"
+			dc " "			
+CPU3		db 16,7,"7 MHz"
+			dc " "
+CPU4		db 16,7,"14 MHz"
+			dc " "
+CPU5		db 16,7,"20 MHz"
+			dc " "
+CPU6		db 16,7,"OverClock 22MHz"
+			dc " "
+CPU7		db 16,7,"OverClock 28MHz - 1T-state delayed in ROM area"
+			dc " "
+CPU8		db 16,7,"OverClock 28MHz"
+			dc " "
+CPU9		db 16,7,"OverClock 30MHz"
+			dc " "						
+
+CPO1		db 16,67,"CPU OverClock mode"
+			dc " "
+CPO2		db 16,7,"allow OverClock"
+			dc " "	
+CPO3		db 16,7,"OverClock mode is intended for experimental use."
+			dc " "
+CPO4		db 16,66,"It is NOT recommended for software that uses"
+			dc " "
+CPO5		db 16,66,"system-critical functions such as writing"
+			dc " "	
+CPO6		db 16,66,"to an SD card. Data may be destroyed."
+			dc " "
+CPO7		db 16,7,"Use keyboard or Spectrum menu to set OverClock."
+			dc " "			
+CPO8		db 16,7,"More info in Programmer's Reference manual."
+			dc " "																		
+
+
+MICE1		db 16,67,"Mouse/External Keyboard"
+			dc " "
+MICE2		db 16,7,"none (disabled)"
+			dc " "			
+MICE3		db 16,7,"K-Mouse Master (keyboard disabled!)"
+			dc " "
+MICE4		db 16,7,"K-Mouse Slave (keyboard disabled!)"
+			dc " "			
+MICE5		db 16,7,"Keyboard"
+			dc " "						
+MICE6		db 16,7,"Keyboard + K-Mouse Master"
+			dc " "	
+MICE7		db 16,7,"K-Mouse Master and Slave (keyboard disabled!)"
+			dc " "					
+
+EXTS1		db 16,67,"EXTRA button - short press"
+			dc " "	
+EXTS2		db 16,7,"none (disabled)"
+			dc " "		
+EXTS3		db 16,7,"CPU speed"
+			dc " "	
+EXTS4		db 16,7,"Machine"
+			dc " "	
+EXTS5		db 16,7,"GigaScreen"
+			dc " "	
+EXTS6		db 16,7,"Warm reset"
+			dc " "
+EXTS7		db 16,7,"Joystick/Gamepad interface mode"
+			dc " "								
+
+EXTL1		db 16,67,"EXTRA button - long press"
+			dc " "	
+EXTL2		db 16,7,"none (disabled)"
+			dc " "		
+EXTL3		db 16,7,"Spectrum menu"
+			dc " "	
+
+ZCSD1		db 16,67,"Z-Controller SD"
+			dc " "
+ZCSD2		db 16,7,"none (disabled)"
+			dc " "			
+ZCSD3		db 16,7,"on first SD slot"
+			dc " "
+ZCSD4		db 16,7,"on second SD slot"
+			dc " "
+
+DIVSD1		db 16,67,"divSD"
+			dc " "
+DIVSD2		db 16,7,"select ROM: 0-FPGA(rescue esxDOS), 1-FLASH"
+			dc " "
+DIVSD3		db 16,7,"swap order first/second SD"
+			dc " "
+
+
+DMA1		db 16,67,"DMA"
+			dc " "
+DMA2		db 16,7,"enable"
+			dc " "				
+
+LIFO1		db 16,67,"IO LIFO stack"
+			dc " "
+LIFO2		db 16,7,"enable"
+			dc " "
+
+CPA1		db 16,67,"CPU speed alternative change"
+			dc " "
+CPA2		db 16,7,"enable ZX UNO speed change"
+			dc " "	
+CPA3		db 16,7,"enable Pentagon 1024 v2.2 turbo"
+			dc " "	
+
+EXP1		db 16,67,"Expansion pack A"
+			dc " "
+EXP2		db 16,7,"none"
+			dc " "	
+EXP3		db 16,7,"Memory 2048KB extension (AA-RAM)"
+			dc " "	
+EXP4		db 16,7,"WiFi"
+			dc " "
+
+EXPB1		db 16,67,"Expansion pack B - UART(WiFi) & second PS2"
+			dc " "
+EXPB2		db 16,7,"UART - internal USB-UART (MB03+ mode) / PS2"
+			dc " "	
+EXPB3		db 16,7,"UART MB03+ / PS2"
+			dc " "	
+EXPB4		db 16,7,"UART ZXUNO / PS2"
+			dc " "	
+EXPB5		db 16,7,"UART ZX128-AY / PS2 disabled"
+			dc " "	
+EXPB6		db 16,7," "
+			dc " "																				
+
+DEBUG1		db 16,67,"Diagnostic"
+			dc " "
+DEBUG2		db 16,7,"none (disabled)"
+			dc " "		
+DEBUG3		db 16,7,"Video sync."
+			dc " "	
+DEBUG31		db 16,7,"Audio level"
+			dc " "		
+DEBUG32		db 16,7,"CPU speed"
+			dc " "					
+DEBUG4		db 16,7,"Video Test Text Pattern"
+			dc " "
+DEBUG5		db 16,7,"Video Test Colour Moving Pattern"
+			dc " "													
+
+; info text
+TEXT0 	 	dc 16,69,"LMN128/Jan Kucera/Zlin/CZ"
+TEXT1    	db 16,7+64,"LMN128       ",16,69,"eLeMeNt ZX        ",16,7+64,"SetUp"
+			dc " "
+TEXT2	 	db 16,65,"Cursor-navigation; Enter-change; R-restart"
+			dc " "
+TEXT3	 	db 16,65,"L-load BIOS defaults+restart"
+			dc " "			
+
+
+STRIPS		db 16,66,32,32,32
+			db 16,71,32,32,32,32,32
+			db 16,70,32,32,32
+			db 16,71,32,32,32,32,32,32,32,32
+			db 16,68,32,32,32
+			db 16,71,32,32,32,32,32,32
+			db 16,69,32,32,32+128
+
+SELECT		db 16,66,0
+			dc " "		
+DESELECT	dc "  "	
+
+ADVS0		db 16,67,"User level: " 
+			dc 16,7," "			
+ADVS1		db 16,6,"OnTime: " 
+			dc 16,7," "
+ADVS2		db 16,6,"Nmi:    "
+			dc 16,7," "
+ADVS3		db 16,6,"Reset:  "
+			dc 16,7," "
+ADVS4		db 16,6,"Extra:  "
+			dc 16,7," "
+ADVS5		db 16,6,"PowerUp:"
+			dc 16,7," "
+LEVEL0		dc 16,7,"   Loser "
+LEVEL1		dc 16,7+64,"  Rookie "
+LEVEL2		dc 16,6,"  Novice "
+LEVEL3		dc 16,6+64,"Beginner "
+LEVEL4		dc 16,5,"Enhanced "
+LEVEL5		dc 16,5+64,"    Geek "
+LEVEL6		dc 16,4,"    Guru "
+LEVEL7		dc 16,4+64,"Ultimate "						
+FW1			dc 16,7,"FW:"
+FW2			dc "1.28/"
+COREFW1		dc 16,67,"FPGA Core:"
+COREFW2		dc 16,7,"20"
+STVER		dc 16,67,"SetUp version:",16,7																								
+; --------------- L I B R A R I E S ---------------------------------------		
+//INCLUDE "nasobeniHLDE.a80"
+	INCLUDE "draw-jugo.a80"
+	INCLUDE "cls.a80"
+	INCLUDE "iinkey.a80"
+//	INCLUDE "wait.a80"
+//	INCLUDE "t42.a80"
+//	INCLUDE "txy.a80"
+	INCLUDE "txy51.a80"
+	INCLUDE "txy32.a80"
+	INCLUDE "wait.a80"
+	INCLUDE "sprite2.a80"
+	INCLUDE "xdec_06.a80"
+//	INCLUDE "cf.a80"
+element_logo
+	INCBIN "ELEMENT_ZX.bin"
+MB03pluslogo
+//	INCBIN "MB03+LOGOv2.bin"
+ultimatelogo	
+//	INCBIN "ULTIMATE.bin"
+dots	
+//	INCBIN "DOTS.bin"	
+CaroLogo
+//	INCBIN "CaroLogo.bin"
+EsxLogo
+//	INCBIN "ESXLOGO.bin"
+BSDOSLogo
+//	INCBIN "BSDOSLOGO.bin"	
+DATE		db 16,0
+	LUA ALLPASS
+	_pc('db	"' .. os.date("%Y%m%d") .. '"') 
+	ENDLUA
+	dc " " 
+		//block 8 // kompenzace delky souboru kvuli os.date
+
+diag		xor a
+			ld (txy32.xyor1),a  //disable OR in print routine
+			ld (txy32.xyor2),a
+			ld (txy32.xyor3),a
+			ld (txy32.T32_ATT),a //no colors 
+1			call iinkey.IINKEY
+			
+			ld h,0
+			ld l,a			
+
+			ld	bc,#08E0
+			ld	(txy32.cursor),bc
+		  	
+			ld   de,-100
+         	call N1
+		  	ld   de,-10
+         	call N1
+		  	ld   a,l
+         	add  a,48
+         	call txy32.xy
+			jr	1B
+
+N1	  		xor  a
+2		 	add  hl,de
+         	jr   nc,1F
+         	inc  a
+         	jr   2B
+1		 	sbc  hl,de
+         	add  a,48
+         	push bc
+         	push hl
+         	call txy32.xy
+         	pop  hl
+         	pop  bc
+         	;;inc  c
+         	ret
+			
+
+endramcode	
+
+CODE	=	#AF
+USR		=	#C0
+LOAD	=	#EF
+CLEAR	=	#FD
+RANDOMIZE =	#F9
+		
+	org	#5C00		;; Basic loader
+baszac	db	0,1			;; Line number
+	dw	linlen			;; Line length
+linzac
+	db	CLEAR,'8',#0E,0,0
+	dw	ramcode-1
+	db	0,':'
+	db	LOAD,'""',CODE,':'
+	db	RANDOMIZE,USR,'8',#0E,0,0
+	dw	ramcode
+	db	0,#0D
+linlen	=	$-linzac
+baslen	=	$-baszac
+	
+		
+	savesna  "setup.sna",ramcode
+	EMPTYTAP "setup.tap"
+	SAVETAP  "setup.tap" , BASIC, setup , baszac,baslen,1
+	SAVETAP  "setup.tap",CODE,"setup",maincode,endramcode-maincode,maincode
+	ENDMODULE
+		

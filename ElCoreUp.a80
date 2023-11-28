@@ -1,0 +1,1163 @@
+﻿;███████████████ V A R I A B L E S ██████████████████████████████████████
+DMA 		equ #0B
+ULA			equ #FE
+e_ZXi_port0	equ #783B
+e_ZXi_port1	equ #793B
+e_ZXi_port2	equ #7A3B
+e_ZXi_port3	equ #7B3B
+e_ZXi_port4	equ #7C3B
+e_ZXi_port5	equ #7D3B
+e_ZXi_port6	equ #7E3B
+e_ZXi_port7	equ #7F3B
+
+g_ZXi_port0	equ #7C3B
+g_ZXi_port1	equ #7D3B
+
+u_ZXi_port0 equ #FC3B
+u_ZXi_port1 equ #FD3B
+
+sst_spi		equ #4B
+sst_cs		equ #63
+
+mem	equ	#07	;; Prepinanie spodnych 8kB pameti
+
+sst_cs MACRO sst_cs_value //#00-disable;#81-enable eLeMeNt;#82-enable MB03+
+	ld bc,g_ZXi_port0
+	ld a,#FF		//g_zxi_0FF - FPGA Core FLASH
+	out (c),a
+	inc b
+	ld a,sst_cs_value
+	out (c),a
+	ENDM
+
+border	MACRO	farba
+	xor	a
+	in	a,(#fe)
+	and	11h
+//	jr	nz,.skip
+	ld	a,farba
+	out	(#fe),a
+.skip
+	ENDM
+
+	DEVICE	ZXSPECTRUM48
+	OUTPUT	ElCoreUp.cod
+
+	org	#8000
+
+maincode
+start	di
+	ld sp,#8000
+//zapnuti HRC
+	ld bc,g_ZXi_port0
+	ld a,#01		//g_zxi_001 - Extra graphics modes
+	out (c),a
+	inc b
+					//01 - HiResColour(HRC) - 512x192pixels / 64x48attributes / Spectrum attributes
+	out (c),a
+//Gigascreen mode1: two video frames mix - general ports
+	dec b
+	ld a,#08		//08 Gigascreen
+	out (c),a
+	inc b
+	ld a,#02
+	out (c),a	
+
+//CPU set to 14MHZ	
+	ld bc,e_ZXi_port0
+	ld a,#30		//30 - CPU speed
+	out (c),a
+	inc b
+	ld a,#02 
+	out (c),a	
+
+
+//HiResColour (HRC)
+//512x192 pixels and 64x48 attributes, linear memory layout and ZX Spectrum attributes format, two buffers switching (ZX128 like, per page 7)
+//12 KB pixels	h4000-h6FFF (hC000-hEFFF)
+//3 KB attrs	h7000-h7BFF (hF000-hFBFF)
+
+;; Zmazanie obrazovky a inicializacia palety
+;; Mazeme vsetko v rozsahu #7000..#7BFF
+
+		xor	a
+		out	(#fe),a
+	
+//mazani videoram
+		ld hl,#7BFF
+		ld (hl),0
+		ld de,#7BFE
+		ld bc,#0BFF
+		lddr		
+		dec hl
+		dec de
+		ld (hl),0
+		ld bc,#2FFF
+		lddr
+
+		ld hl,TXT0
+		ld bc,#0000
+		ld (cursor),bc
+		call txy
+
+//eLeMeNt detection
+		ld bc,e_ZXi_port0
+		ld a,#FF
+		out (c),a
+		inc b
+		in a,(c)
+		and #F0
+		ld	hl,TXT1
+		cp #E0
+		jr z,1F
+		ld	hl,TXT2
+1		ld bc,#0301
+		ld (cursor),bc
+		push af
+		call txy
+		pop af
+		jr z,1F
+		halt
+1			
+//zjisteni soucasne verze Core
+		ld bc,(cursor)	
+		inc c	
+		ld (cursor),bc
+
+		ld	hl,TXT20
+		call txy	
+
+		ld a,#FE
+1		ld bc,e_ZXi_port0
+		out (c),a
+		inc b
+		ld h,0
+		in l,(c)
+		push af			
+		call NUMBER1
+		pop af
+		dec a
+		cp #FD
+		jr z,3F
+		cp #FC
+		jr nz,2F
+3		push af
+		ld a,"/"		
+		call xy
+		pop af
+2		cp #FB
+		jr nz,1B //was 5F
+/*		push af //Time print
+		ld a," "
+		call xy
+		pop af
+5		cp #FA
+		jr z,6F
+		cp #F9
+		jr nz,4F
+6		push af
+		ld a,":"
+		call xy
+		pop af
+4		cp #F8
+		jr nz, 1B*/
+//Board detection
+		ld hl,TXT21
+		call txy
+		ld a,#EF
+		ld bc,e_ZXi_port0
+		out (c),a
+		inc b
+		in a,(c)
+		ld hl,TXT21a
+		or a
+		jr z,1F
+		ld hl,TXT21b
+		cp 1
+		jr z,1F
+		ld hl,TXT21c
+1		push af		
+		call txy
+		pop af
+		jr z,1F
+		halt
+1		
+		ld	hl,main.path
+		or a
+		jr z,1F
+		ld	hl,main.path2
+1		ld (main.path_back),hl //ulozeni zvolene cesty pro tisk	a load souboru	
+//FLASH chip detection
+		ld hl,TXT3
+		ld bc,#0501
+		ld (cursor),bc
+		call txy		
+			
+//test cteni JEDEC DEVICE ID
+		sst_cs #81	 		//enable FLASH eLeMeNt		
+		xor a
+		out (sst_spi),a  	//NOP na prostouchnuti CLK signalu do FLASH (FPGA protrebuje alespon 3T pro STARTUPE2)
+		sst_cs #00 		
+		
+		sst_cs #81	 		//enable FLASH eLeMeNt
+		
+		ld a,#9F
+		out (sst_spi),a		//read JEDEC DEVICE ID
+		in a,(sst_spi)		//dummy read
+		in a,(sst_spi)
+		ld hl,TXT6
+		cp #BF
+		jr nz,1F
+		in a,(sst_spi)
+		cp #26
+		jr nz,1F
+		in a,(sst_spi)
+		ld hl,TXT5
+		cp #42
+		jr z,1F
+		ld hl,TXT4
+		cp #43
+		jr z,1F
+		ld hl,TXT6	
+1		call txy		
+		sst_cs #00 
+
+		sst_cs #81	 		//enable FLASH eLeMeNt
+		
+		ld a,#9F
+		out (sst_spi),a		//read JEDEC DEVICE ID
+		in a,(sst_spi)		//dummy read
+		in a,(sst_spi)
+		ld l,a
+		call HEX1
+		in a,(sst_spi)
+		ld l,a
+		call HEX1
+		in a,(sst_spi)
+		ld l,a
+		call HEX1
+		
+		sst_cs #00 			
+
+//		jp TEST1
+
+//load souboru
+		ld hl,TXT7
+		ld bc,#0901
+		ld (cursor),bc
+		call txy
+		ld hl,(main.path_back)	//zobrazi hledany nazev souboru
+		call txy
+
+		call main.Start
+		ld hl,TXT8
+		jr c,1F
+		ld hl,TXT9
+1		ld bc,#0B01
+		ld (cursor),bc
+		push af
+		call txy
+		call main.Close	//zavreni souboru
+		pop af
+		jr nc,1F
+		halt
+1		
+//tisk delky core souboru
+		ld a,6
+		ld (ATT),a
+		ld hl,main.FileLen
+		ld de,xdec_06.zzbin
+		ld bc,3
+		ldir
+		xor a
+		ld (de),a //nula na nejvyssi byte
+		call xdec_06.bindec
+		ld b,10
+		ld c," "
+		ld hl,xdec_06.zzdec
+1		ld a,(hl)
+		add a,"0"
+		cp "0"
+		jr nz,3F
+		ld a,c			
+		jr 2F
+3		ld c,"0"			
+2		push hl
+		push bc
+		cp " "
+		
+		call nz,xy
+
+		
+		pop bc
+		pop hl
+4		inc hl
+		djnz 1B
+		ld a,7
+		ld (ATT),a
+		ld hl,TXT10
+		call txy
+
+		ld a,(main.FileLen+2)
+		ld l,a
+		call HEX1
+		ld a,(main.FileLen+1)
+		ld l,a
+		call HEX1
+		ld a,(main.FileLen+0)
+		ld l,a
+		call HEX1
+
+//test cteni celeho souboru
+		ld hl,TXT11
+		ld bc,#0D01
+		ld (cursor),bc
+		call txy
+
+		call main.Start
+		jr nc,2F
+1		ld hl,TXT13
+		call txy
+		halt
+2
+		ld hl,(main.FileLen+1)
+		ld a, (main.FileLen+0)
+		and a
+		jr nz,1F
+		dec hl
+1		ld (count1+1),hl
+
+		ld	bc,256	;délka načítaného bloku dat
+5		ld	a,(main.fileID)	;S tímto kanálem budeme pracovat
+		ld	ix,main.mbuffer	;Načteme 256 B (délka v BC) do mbufferu
+		rst	8
+		defb	main.F_READ	;API Read block
+		//ret	c	;carry=chyba při čtení>> v A kód chyby
+		jr c,1F
+		ld	a,b	;Není poslední část dlouhá 0?
+		or	c	;Pokud ano, nebudeme spracovávat. Není co.
+		jr	z,4F	;>>uzavřít soubor
+
+		push	bc	;Dočasně uložíme délku načteného bloku
+
+;takže tady spracujeme nějak ty data na adrese mbuffer a o délce v registru BC.
+		
+count1	ld hl,0
+		call HEX3
+		ld hl,(count1+1)
+		dec hl
+		ld (count1+1),hl
+		ld hl,TXT28
+		call txy
+		ld bc,(cursor)
+		ld a,-6
+		add a,c
+		ld c,a
+		ld (cursor),bc
+
+		pop	hl	;Vrátíme do HL délku bloku
+
+		ld	bc,256	;Délka dalších načítaných dat
+		and	a	;ClearCarry
+		sbc	hl,bc	;byl posledně načtený blok 256 B?
+		jr	z,5B	;Ano>> načteme další část.
+
+;Poslední blok byl menší jak 256 B, nebo dokonce 0. Znamená to že jsme na
+;konci souboru. Uzavřeme kanál souboru.
+
+4		ld	a,(main.fileID)	;S tímto kanálem budeme pracovat
+		rst	8	;Zavřít kanál
+		defb	main.F_CLOSE	;Carry=chyba
+
+		jr nc,2F
+1		ld hl,TXT13
+		ld bc,(cursor)
+		ld a,7
+		add a,c
+		ld c,a
+		ld (cursor),bc
+		call txy
+		halt
+
+2		ld hl,TXT12
+		ld bc,(cursor)
+		ld a,7
+		add a,c
+		ld c,a
+		ld (cursor),bc
+		call txy
+
+//cte prvni sector bit files pro parser
+		call main.Start
+		jr c,1F
+		ld	bc,256
+		ld	a,(main.fileID)	;S tímto kanálem budeme pracovat
+
+		ld	ix,main.mbuffer	;Načteme 256 B (délka v BC) do mbufferu
+		rst	8
+		defb	main.F_READ	;API Read block
+		//ret	c	;carry=chyba při čtení>> v A kód chyby
+;Pokud nenastala žádná chyba, v BC máme počet skutečně načtených bajtů.
+;Bude to 256 s výjimkou poslední části. Ta může být i 0, pokud délka souboru
+;bude dělitelná délkou bloku bezezbytku. Tuto čás opakuj tak dlouho,
+;dokud délka načtených dat není cokoliv jiného než 256.		
+		jr nc,2F
+1		ld hl,TXT13
+		call txy
+		halt
+
+2		
+//parser header
+//Field 1
+//2 bytes          length 0x0009           (big endian)!!!
+//9 bytes          some sort of header
+
+		ld bc,(cursor)
+		ld c,1
+		inc b
+		ld (cursor),bc
+
+		ld hl,main.mbuffer
+		ld d,(hl)
+		inc hl
+		ld e,(hl)
+		inc hl
+		add hl,de	//preskocime Field 1, nezajimave data
+
+//Field 2
+//2 bytes          length 0x0001
+//1 byte           key 0x61                (The letter "a")		
+		ld d,(hl)
+		inc hl
+		ld e,(hl)
+		add hl,de
+		ld a,(hl)
+		cp "a"
+		jr z,1F			//neni "a" error
+		ld hl,TXT14
+		call txy
+		halt
+1		inc hl
+
+//Field 3
+//2 bytes          length 0x000a           (value depends on file name length)
+//10 bytes         string design name "xform.ncd" (including a trailing 0x00)
+
+		ld bc,(cursor)
+		ld c,1
+		inc b
+		inc b
+		ld (cursor),bc
+		push hl
+		ld hl,TXT15	
+		call txy
+		pop hl
+
+		ld d,(hl)
+		inc hl
+		ld e,(hl)
+		inc hl
+		push hl
+		push de
+		call txy
+		pop de
+		pop hl
+		add hl,de
+
+//		ld hl,main.mbuffer+16
+//		call txy
+//Field 4
+//1 byte           key 0x62                (The letter "b")
+//2 bytes          length 0x000c           (value depends on part name length)
+//12 bytes         string part name "v1000efg860" (including a trailing 0x00)
+		ld bc,(cursor)
+		ld c,1
+		inc b
+		inc b
+		ld (cursor),bc
+		push hl
+		ld hl,TXT16		
+		call txy	
+		pop hl
+		
+		ld a,(hl)
+		cp "b"
+		jr z,1F			//neni "b" error
+		ld hl,TXT14
+		call txy
+		halt
+1		inc hl
+		ld d,(hl)
+		inc hl
+		ld e,(hl)
+		inc hl
+		push hl
+		push de
+		ld a,6
+		ld (ATT),a
+		call txy
+		ld a,7
+		ld (ATT),a
+		pop de
+		pop hl
+//porovnani spravneho typu FPGA		
+		add hl,de
+//Field 5
+//1 byte           key 0x63                (The letter "c")
+//2 bytes          length 0x000b
+//11 bytes         string date "2001/08/10"  (including a trailing 0x00)
+
+		ld bc,(cursor)
+		ld c,1
+		inc b
+		inc b
+		ld (cursor),bc
+		push hl
+		ld hl,TXT17
+		call txy
+		pop hl
+
+		
+		ld a,(hl)
+		cp "c"
+		jr z,1F			//neni "c" error
+		ld hl,TXT14
+		call txy
+		halt
+1		inc hl
+		ld d,(hl)
+		inc hl
+		ld e,(hl)
+		inc hl
+		push hl
+		push de
+		ld a,6
+		ld (ATT),a
+		call txy
+		ld a,7
+		ld (ATT),a
+		pop de
+		pop hl
+		add hl,de
+
+//Field 5
+//1 byte           key 0x64                (The letter "d")
+//2 bytes          length 0x0009
+//9 bytes          string time "06:55:04"    (including a trailing 0x00)		
+		ld bc,(cursor)	
+		inc c	
+		ld (cursor),bc
+
+		ld a,(hl)
+		cp "d"
+		jr z,1F			//neni "d" error
+		ld hl,TXT14
+		call txy
+		halt
+1		inc hl
+		ld d,(hl)
+		inc hl
+		ld e,(hl)
+		inc hl
+		push hl
+		push de
+		call txy
+		pop de
+		pop hl
+		add hl,de
+
+//Field 6
+//1 byte           key 0x65                 (The letter "e")
+//4 bytes          length 0x000c9090        (value depends on device type,
+//                                           and maybe design details)		
+		ld bc,(cursor)	
+		inc c	
+		ld (cursor),bc
+
+		ld a,(hl)
+		cp "e"
+		jr z,1F			//neni "d" error
+		ld hl,TXT14
+		call txy
+		halt
+1		inc hl
+
+		ld a,(hl)
+		ld (core_length+3),a
+		inc hl
+		ld a,(hl)
+		ld (core_length+2),a
+		inc hl
+		ld a,(hl)
+		ld (core_length+1),a
+		inc hl
+		ld a,(hl)
+		ld (core_length+0),a
+		inc hl
+		push hl
+		ld hl,TXT19
+		call txy
+		pop hl
+		ld	bc,main.mbuffer
+		and	a	;ClearCarry
+		sbc	hl,bc
+		ld (core_start),hl
+		call HEX3
+		ld bc,(cursor)	
+		inc c	
+		ld (cursor),bc
+		ld hl,TXT18
+		call txy
+		ld hl, (core_length+2)
+		call HEX3
+		ld hl, (core_length+0)
+		call HEX3
+
+		
+
+//waiting for press U
+TEST1
+		ld bc,(cursor)
+		ld c,1
+		inc b
+		inc b
+		inc b
+		inc b
+		ld (cursor),bc
+
+		ld hl,TXT23
+		call txy
+
+		ld bc,(cursor)
+		ld c,1
+		inc b
+		inc b
+		ld (cursor),bc
+
+		ld hl,TXT22
+		call txy
+
+		ld bc,(cursor)
+		ld c,1
+		inc b
+		inc b
+		ld (cursor),bc
+
+		call iinkey.ANYKEY
+		cp "U"
+		jr z,1F
+		ld hl,TXT24
+		call txy
+		halt
+
+//erase FLASH
+1
+		ld bc,(cursor)
+		ld c,1
+		inc b
+		inc b
+		ld (cursor),bc
+//WREN
+		sst_cs #81	 		//enable FLASH eLeMeNt
+		ld a,#06
+		out (sst_spi),a		//WREN-WriteEnable
+		sst_cs #80 	
+//WRSR
+		sst_cs #81	 		//enable FLASH eLeMeNt
+		ld a,#01
+		out (sst_spi),a		//WRSR-WriteConfigurationRegister
+		ld a,#0A			//WP#pins disable, NoMemoryBlock
+		out (sst_spi),a		//StatusByte - ignored by FLASH
+		out (sst_spi),a		//ConfigurationByte	
+		sst_cs #80 
+//WREN
+		sst_cs #81	 		//enable FLASH eLeMeNt
+		ld a,#06
+		out (sst_spi),a		//WREN-WriteEnable
+		sst_cs #80 	
+//ULBPR
+		sst_cs #81	 		//enable FLASH eLeMeNt
+		ld a,#98
+		out (sst_spi),a		//ULBPR-GlobalBlockProtectionUnlock
+		sst_cs #80 
+//RDSR
+1		sst_cs #81	 		//enable FLASH eLeMeNt
+		ld a,#05
+		out (sst_spi),a		//RDSR-ReadStatusRegister
+		in a,(sst_spi)		//Dummy byte
+		in a,(sst_spi)
+		push af
+		sst_cs #80
+		pop af
+		and 128
+		jr nz,1B			//Busy 
+//WREN
+		sst_cs #81	 		//enable FLASH eLeMeNt
+		ld a,#06
+		out (sst_spi),a		//WREN-WriteEnable
+		sst_cs #80 			
+//CE-EraseFullArray		
+		sst_cs #81	 		//enable FLASH eLeMeNt
+		ld a,#C7
+		out (sst_spi),a		//CE-EraseFullArray
+		sst_cs #80
+//RDSR
+1		sst_cs #81	 		//enable FLASH eLeMeNt
+		ld a,#05
+		out (sst_spi),a		//RDSR-ReadStatusRegister
+		in a,(sst_spi)		//Dummy byte
+		in a,(sst_spi)
+		push af
+		sst_cs #80
+		pop af
+		and 128
+		jr nz,1B			//Busy 
+
+		ld hl,TXT25
+		call txy 
+
+//Write to FLASH by 256bytes block
+		ld bc,(cursor)
+		ld c,1
+		inc b
+		inc b
+		ld (cursor),bc
+		ld hl,TXT26
+		call txy
+
+		ld hl,#0000			//nulovani write adresy FLASH- adresa*256
+		ld (addrHL+1),hl
+
+//Load 256bytes from file
+
+
+		call main.Start
+		jr nc,2F
+8		ld hl,TXT13
+		call txy
+		halt
+2
+		ld hl,(main.FileLen+1)
+		ld a, (main.FileLen+0)
+		and a
+		jr nz,1F
+		dec hl
+1		ld (count2+1),hl
+
+//seek na spravnou pozici kde zacinaji data
+		ld	a,(main.fileID)	;S tímto kanálem budeme pracovat
+		ld  lx,0			//absolutni pozice mode:  0 - from start of file; 1 - forward from current position; 2 - back from current position
+		ld 	hl,0
+		ld 	de,(core_start)	//BCDE - bytes to seek
+		ld 	bc,0
+		rst 8
+		defb	main.F_SEEK
+		jr c,8B
+
+		ld	bc,256	;délka načítaného bloku dat
+5		ld	a,(main.fileID)	;S tímto kanálem budeme pracovat
+		ld	ix,main.mbuffer	;Načteme 256 B (délka v BC) do mbufferu
+		rst	8
+		defb	main.F_READ	;API Read block
+		//ret	c	;carry=chyba při čtení>> v A kód chyby
+		jr c,8B
+		ld	a,b	;Není poslední část dlouhá 0?
+		or	c	;Pokud ano, nebudeme spracovávat. Není co.
+		jp	z,4F	;>>uzavřít soubor
+
+		push	bc	;Dočasně uložíme délku načteného bloku
+
+;takže tady spracujeme nějak ty data na adrese mbuffer a o délce v registru BC.
+
+//WREN
+		sst_cs #81	 		//enable FLASH eLeMeNt
+		ld a,#06
+		out (sst_spi),a		//WREN-WriteEnable
+		sst_cs #80 	
+//PP-PageProgram	
+		sst_cs #81	 		//enable FLASH eLeMeNt
+		ld a,#02
+		out (sst_spi),a		//PP-PageProgram
+addrHL	ld hl,#0000
+
+		ld a,h				//Address MSb
+		out (sst_spi),a		
+		ld a,l				//Address
+		out (sst_spi),a
+		xor a				//Address LSb - vzdy nula, protoze zapisujeme po 256bytes
+		out (sst_spi),a
+		ld hl,main.mbuffer
+		ld bc,sst_spi		//256bytes counter+port
+		otir
+		sst_cs #80 
+//RDSR
+1		sst_cs #81	 		//enable FLASH eLeMeNt
+		ld a,#05
+		out (sst_spi),a		//RDSR-ReadStatusRegister
+		in a,(sst_spi)		//Dummy byte
+		in a,(sst_spi)
+		push af
+		sst_cs #80
+		pop af
+		and 128
+		jr nz,1B			//Busy 
+
+//Verify written bytes
+//READ
+		sst_cs #81	 		//enable FLASH eLeMeNt
+		ld a,#03
+		out (sst_spi),a		//Read memory
+		ld hl, (addrHL+1)
+		ld a,h				//Address MSb
+		out (sst_spi),a		
+		ld a,l				//Address
+		out (sst_spi),a
+		xor a				//Address LSb - vzdy nula, protoze zapisujeme po 256bytes
+		out (sst_spi),a
+		ld hl,main.read_buffer
+		ld bc,sst_spi		//256bytes counter+port
+		in a,(sst_spi)		//Dummy byte
+		inir
+		sst_cs #80 	
+//compare buffer to verify
+		ld hl,main.read_buffer
+		ld de,main.mbuffer
+		ld b,0				//256bytes for test
+1		ld a,(de)
+		cp (hl)
+		jr nz,verifyerror
+		inc hl
+		inc de
+		djnz 1B
+		jr verifyok
+verifyerror
+		ld hl,TXT29
+		ld bc,(cursor)
+		ld a,7
+		add a,c
+		ld c,a
+		ld (cursor),bc
+		call txy
+		halt
+verifyok
+		ld hl,(addrHL+1)
+		inc hl	
+		ld (addrHL+1),hl	
+		
+count2	ld hl,0
+		call HEX3
+		ld hl,(count2+1)
+		dec hl
+		ld (count2+1),hl
+		ld hl,TXT28
+		call txy
+		ld bc,(cursor)
+		ld a,-6
+		add a,c
+		ld c,a
+		ld (cursor),bc
+
+		pop	hl	;Vrátíme do HL délku bloku
+
+		ld	bc,256	;Délka dalších načítaných dat
+		and	a	;ClearCarry
+		sbc	hl,bc	;byl posledně načtený blok 256 B?
+		jp	z,5B	;Ano>> načteme další část.
+
+;Poslední blok byl menší jak 256 B, nebo dokonce 0. Znamená to že jsme na
+;konci souboru. Uzavřeme kanál souboru.
+
+4		ld	a,(main.fileID)	;S tímto kanálem budeme pracovat
+		rst	8	;Zavřít kanál
+		defb	main.F_CLOSE	;Carry=chyba
+		jr nc,2F
+
+1		ld hl,TXT13
+		ld bc,(cursor)
+		ld a,7
+		add a,c
+		ld c,a
+		ld (cursor),bc
+		call txy
+		halt
+
+2		ld hl,TXT12
+		ld bc,(cursor)
+		ld a,7
+		add a,c
+		ld c,a
+		ld (cursor),bc
+		call txy
+
+
+		sst_cs #00			//dissable block of reset/nmi/extra buttons
+
+		ld bc,(cursor)
+		inc b
+		inc b
+		inc b
+		ld c,1
+		ld (cursor),bc
+
+		ld hl,TXT27
+		call txy
+		
+		ld bc,(cursor)
+		inc b
+		inc b
+		ld c,1
+		ld (cursor),bc
+
+		ld hl,TXT27a
+		call txy
+
+		ld hl,TEXT99
+		ld bc,#2E37
+		ld (cursor),bc
+		call txy
+			
+		halt
+
+core_length ds 4 //delka flashovacich dat
+core_start	ds 2 //pozice prvniho byte ve file pro flashovani
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+//tisk HRC
+txy	 	ld   a,(hl)
+		and  127
+		cp   16
+		jr	  z,colorchange
+		push hl
+		call xy
+		pop  hl
+1 		ld   a,(hl)
+		rla
+		ret  c				//tisk az do znaku s nastavenym 7. bitem
+		and a
+		ret z				//nebo konec, kdyz 0
+		inc  hl
+		jr   txy
+
+colorchange
+		inc hl
+		ld a,(hl)
+		ld (ATT),a
+		jr 1B	
+ATT		defb 64+7	
+
+xy		and	a
+		ret	z					// nula konec tisku, pri tisku jednoho znaku
+
+		
+		ld	de,znaky-(8*32)
+		ld	h,#00
+		ld	l,a
+		add	hl,hl
+		add	hl,hl
+		add	hl,hl
+		add	hl,de				//HL adresa znaku v sade
+
+		
+		ex 	hl,de
+		ld	hl,#4000
+		ld	bc,(cursor)
+
+		add hl,bc
+		call COLOR
+		ld b,8					//8 mikroradku
+2		ld a,(de)
+//		or 	(hl)				//OVER
+		ld 	(hl),a
+		push bc
+		ld bc,64				//dalsi microradek
+		add hl,bc
+		pop bc		
+		inc de
+		djnz 2B
+		ld	bc,(cursor)
+		inc c
+		ld	(cursor),bc
+		ret
+	
+COLOR	push af
+		push de
+		push hl
+		ld a,(ATT)
+//		or a
+//		ret z					//pokud je nula, tak se neobarvuje
+
+		ld a,l
+		and %00111111
+		ld l,a
+		
+		ld a,h
+		rrca
+		rrca
+		push af
+		
+		and %11000000
+		or l
+		ld l,a 
+		pop af
+		
+		and %00111111
+		or #70
+		ld h,a
+		ld a,(ATT)
+		ld (hl),a
+		ld de,64
+		add hl,de
+		ld (hl),a
+		pop hl
+		pop de
+		pop af
+		ret
+
+cursor
+xxx	db	#00
+yyy	db	#00
+
+;------------------------------
+;HL-HODNOTA
+;TISKNE DEC CISLO TYPU INTEGER
+NUMBER4  ld   de,-10000
+         call NUM_JED
+NUMBER3  ld   de,-1000
+         call NUM_JED
+NUMBER2  ld   de,-100
+         call NUM_JED
+NUMBER1  ld   de,-10
+         call NUM_JED
+NUMBER0  ld   a,l
+         add  a,48
+         jp   xy
+
+NUM_JED  xor  a
+NUM_JED1 add  hl,de
+         jr   nc,NUM_PRIC
+         inc  a
+         jr   NUM_JED1
+NUM_PRIC sbc  hl,de
+         add  a,48
+         push bc
+         push hl
+         call xy
+         pop  hl
+         pop  bc
+         ;;inc  c
+         ret
+;------------------------------
+;HL-HODNOTA
+;TISKNE HEX CISLO TYPU INTEGER	
+HEX3	ld a,h
+		and #F0
+		rrca
+		rrca
+		rrca
+		rrca
+		push hl
+		call HEX
+		pop hl
+
+HEX2    ld a,h
+		push hl
+		call 2F
+		pop hl		
+
+HEX1	ld a,l
+		and #F0
+		rrca
+		rrca
+		rrca
+		rrca
+		push hl
+		call HEX
+		pop hl
+
+HEX0	ld a,l
+2		and #0F
+HEX		cp 10
+		jr c,1F
+		add a,7
+1		add a,48
+		jp xy
+
+TXT0 	dc 16,32+8," FPGA Core Update Utility v1.2 "
+TXT1	db 16,66,"e",16,71,"L",16,70,"e",16,71,"M",16,68,"e",16,71,"N",16,69,"t" 
+		db 16,71," ZX"
+		dc 16,07," detected;"
+TXT2	dc 16,66,"no eLeMeNt ZX - none to flash!"
+TXT3	dc "FLASH chip type: "
+TXT4	dc "SST26VF064 id:" //MB03+
+TXT5	dc "SST26VF032 id:" //eLeMeNt
+TXT6	db 16,02,"unknown "
+		dc 16,07,"id:"
+TXT7	dc "Searching for core update file: "
+TXT8	dc 16,02,"File loadind error!"
+TXT9	dc "File size: "
+TXT10	dc " bytes #"
+TXT11	dc "File read check: #"
+TXT12	dc "OK"
+TXT13	dc 16,02,"File reading error!"
+TXT14	dc 16,02,"File parser error!"
+TXT15	dc "Info: "
+TXT16	dc "FPGA type: "
+TXT17	dc "Core: "
+TXT18	dc "Length: #"
+TXT19	dc "Start: #"
+TXT20	dc "current core: 20"
+TXT21	dc "; board: "
+TXT21a	dc "Au"	
+TXT21b	dc "Au+"
+TXT21c	dc 16,02,"unknown"
+TXT22	db 16,7,"Press '",16,68,"U",16,7,"' for update FPGA core."
+		dc " "		
+TXT23	dc 16,66,"Shutting down your machine will cause core corruption!"	
+TXT24	dc "Update canceled. Come back anytime. LMN128"
+TXT25	dc "Erase Flash completed"
+TXT26	dc "Programing Flash: #"
+TXT27	dc 16,68,"FPGA core update successfully completed"
+TXT27a	dc 16,7,"Power cycle (off/on) machine to apply updated core, please."
+TXT28	dc "00"
+TXT29	dc 16,02,"Verify error! Something is wrong, try to use PC update utility"
+
+TEXT99	dc 16,5,"LMN128"
+
+
+//znaky
+znaky
+ 	INCBIN Precinct_0_Short.ch8
+	
+	ALIGN	#0100
+	ds	#0100	;; Rezerva pre zasobnik
+tabim2	ds	#0200	;; Tabulka IM2 a zaciatok zobrazacieho enginu
+
+	INCLUDE "main.asm"
+	INCLUDE "iinkey.a80"
+	INCLUDE "xdec_06.a80"	
+endramcode
+
+CODE	=	#AF
+USR		=	#C0
+LOAD	=	#EF
+CLEAR	=	#FD
+RANDOMIZE =	#F9
+
+;; Basic loader
+
+baszac	db	0,1			;; Line number
+	dw	linlen			;; Line length
+linzac
+	db	CLEAR,'8',#0E,0,0
+	dw	start-1
+	db	0,':'
+	db	LOAD,'""',CODE,':'
+	db	RANDOMIZE,USR,'8',#0E,0,0
+	dw	start
+	db	0,#0D
+linlen	=	$-linzac
+baslen	=	$-baszac
+	
+	EMPTYTAP "ElCoreUp.tap"
+	SAVESNA  "ElCoreUp.sna" , start
+	SAVETAP  "ElCoreUp.tap" , BASIC, "ElCoreUp" , baszac , baslen , 1
+	SAVETAP  "ElCoreUp.tap" , CODE , "ElCoreUp" , maincode , endramcode-maincode , maincode
