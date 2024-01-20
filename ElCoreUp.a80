@@ -415,6 +415,7 @@ count1	ld hl,0
 		ld bc,(cursor)
 		ld c,1
 		inc b
+		inc b
 		ld (cursor),bc
 
 		ld hl,main.mbuffer
@@ -1081,7 +1082,7 @@ HEX		cp 10
 1		add a,48
 		jp xy
 
-TXT0 	dc 16,32+8," FPGA Core Update Utility v1.2 "
+TXT0 	dc 16,32+8," FPGA Core Update Utility v1.3 "
 TXT1	db 16,66,"e",16,71,"L",16,70,"e",16,71,"M",16,68,"e",16,71,"N",16,69,"t" 
 		db 16,71," ZX"
 		dc 16,07," detected;"
