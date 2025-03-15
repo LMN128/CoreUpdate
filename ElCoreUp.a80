@@ -1,18 +1,31 @@
 ﻿;███████████████ V A R I A B L E S ██████████████████████████████████████
 DMA 		equ #0B
 ULA			equ #FE
+
+SID0		equ #6C3B
+SID1		equ #6D3B
+SAA0		equ #6E3B
+SAA1		equ #6F3B
+//MB03+
+m_ZXi_port0	equ #703B
+m_ZXi_port1	equ #713B
+m_ZXi_port2	equ #723B
+m_ZXi_port3	equ #733B
+m_ZXi_port4	equ #743B
+m_ZXi_port5	equ #753B
+m_ZXi_port6	equ #763B
+m_ZXi_port7	equ #773B
+//eLeMeNtZX
 e_ZXi_port0	equ #783B
 e_ZXi_port1	equ #793B
-e_ZXi_port2	equ #7A3B
-e_ZXi_port3	equ #7B3B
-e_ZXi_port4	equ #7C3B
-e_ZXi_port5	equ #7D3B
-e_ZXi_port6	equ #7E3B
-e_ZXi_port7	equ #7F3B
+e_ZXi_port2	equ #7A3B	//reserved
+e_ZXi_port3	equ #7B3B	//reserved
 
+//common
 g_ZXi_port0	equ #7C3B
 g_ZXi_port1	equ #7D3B
 
+//Uno
 u_ZXi_port0 equ #FC3B
 u_ZXi_port1 equ #FD3B
 
@@ -99,8 +112,81 @@ start	di
 		ld bc,#0000
 		ld (cursor),bc
 		call txy
+		
+		ld bc,(cursor)
+		ld c,#01
+		inc b
+		inc b
+		inc b
+		ld (cursor),bc
+		ld hl,MENU1
+		call txy
+		ld bc,(cursor)
+		ld c,#01
+		inc b
+		inc b
+		ld (cursor),bc
+		ld hl,MENU2
+		call txy
+		ld bc,(cursor)
+		ld c,#01
+		inc b
+		inc b
+		ld (cursor),bc
+		ld hl,MENU3
+		call txy
+		ld bc,(cursor)
+		ld c,#01
+		inc b
+		inc b
+		ld (cursor),bc
+		ld hl,MENU4
+		call txy
+
+1		call iinkey.ANYKEY
+		cp 13
+		jr z,1F
+		cp "1"
+		jr z,1F
+		cp "2"
+		jr nz,1B
+
+1
+		ld bc,(cursor)
+		ld c,#01
+		inc b
+		inc b
+		inc b
+		ld (cursor),bc //set cursor position for device detection
+		cp "1"
+		jr z,el_detect
+
+//mb03+ detection
+		ld bc,m_ZXi_port0
+		ld a,#FF
+		out (c),a
+		ld b,#77	//zxi_6FF - Interface ID: h33 for 3-MB03+ and 3-board version v3.x
+		in a,(c)
+		and #F0
+		cp #30
+		jr nz,el_detect	//no MB03+, try to detect eLeMeNt
+		
+		in a,(c)
+		and #0F
+		ld	hl,mTXT1v3
+		cp #03
+		jr z,1F
+		ld	hl,mTXT1v4
+1		ld (board),a	//save board version
+		ld a,2
+		ld (device),a	//2-MB03+
+		push af
+		call txy
+		pop af
+		jr core_detect		
 
 //eLeMeNt detection
+el_detect
 		ld bc,e_ZXi_port0
 		ld a,#FF
 		out (c),a
@@ -108,18 +194,92 @@ start	di
 		in a,(c)
 		and #F0
 		ld	hl,TXT1
+		ld b,1
 		cp #E0
 		jr z,1F
-		ld	hl,TXT2
-1		ld bc,#0301
-		ld (cursor),bc
+	
+		ld	hl,TXT2		
+		call txy
+		border 1
+		halt				//END - nothing to update
+1		
+		xor a
+		ld (board),a	//save board version
+		ld a,1
+		ld (device),a	//1-element
+
 		push af
 		call txy
 		pop af
+
+core_detect
+		ld a,(device)
+		cp #01
+		jp z,core_el_detect
+		cp #02
+		jr z,core_mb_detect
+		ld bc,(cursor)	
+		inc c	
+		ld (cursor),bc
+		ld	hl,ERROR0
+		call txy
+		border 2
+		halt				//END - error
+
+//MB03+ core version detection
+core_mb_detect
+		ld bc,(cursor)	
+		inc c	
+		ld (cursor),bc
+
+		ld	hl,TXT20
+		call txy	
+
+		ld a,#FF
+		ld bc,m_ZXi_port0
+		out (c),a
+		ld b,#76
+1		ld h,0
+		in l,(c)
+		push bc			
+		call NUMBER1
+		pop bc
+		dec b
+		ld a,b
+		cp #75
+		jr z,3F
+		cp #74
+		jr nz,2F
+3		push bc
+		push af
+		ld a,"/"		
+		call xy
+		pop af
+		pop bc
+2		cp #73
+		jr nz,1B
+		
+		ld	hl,main.path3
+		ld a,(board)
+		cp #03
 		jr z,1F
-		halt
-1			
-//zjisteni soucasne verze Core
+		ld	hl,main.path4
+		cp #04
+		jr z,1F
+		ld	hl,ERROR0
+		ld bc,(cursor)
+		ld c,#01
+		inc b
+		inc b
+		inc b
+		ld (cursor),bc 
+		call txy
+		border 2
+		halt				//END - error		
+1		ld (main.path_back),hl //ulozeni zvolene cesty pro tisk	a load souboru
+		jr flash_detect		
+//eLeMeNt core version detection
+core_el_detect	
 		ld bc,(cursor)	
 		inc c	
 		ld (cursor),bc
@@ -187,19 +347,28 @@ start	di
 		jr z,1F
 		ld	hl,main.path2
 1		ld (main.path_back),hl //ulozeni zvolene cesty pro tisk	a load souboru	
+
+flash_detect
+
 //FLASH chip detection
 		ld hl,TXT3
-		ld bc,#0501
+		ld bc,(cursor)
+		ld c,#01
+		inc b
+		inc b
 		ld (cursor),bc
 		call txy		
 			
 //test cteni JEDEC DEVICE ID
-		sst_cs #81	 		//enable FLASH eLeMeNt		
+		ld a,(device)
+		or #80
+		ld l,a
+		sst_cs l	 		//enable FLASH eLeMeNt/MB03+ #00-disable;#81-enable eLeMeNt;#82-enable MB03+		
 		xor a
 		out (sst_spi),a  	//NOP na prostouchnuti CLK signalu do FLASH (FPGA protrebuje alespon 3T pro STARTUPE2)
 		sst_cs #00 		
 		
-		sst_cs #81	 		//enable FLASH eLeMeNt
+		sst_cs l	 		//enable FLASH eLeMeNt/MB03+ #00-disable;#81-enable eLeMeNt;#82-enable MB03+
 		
 		ld a,#9F
 		out (sst_spi),a		//read JEDEC DEVICE ID
@@ -222,7 +391,10 @@ start	di
 1		call txy		
 		sst_cs #00 
 
-		sst_cs #81	 		//enable FLASH eLeMeNt
+		ld a,(device)
+		or #80
+		ld l,a
+		sst_cs l	 		//enable FLASH eLeMeNt/MB03+ #00-disable;#81-enable eLeMeNt;#82-enable MB03+
 		
 		ld a,#9F
 		out (sst_spi),a		//read JEDEC DEVICE ID
@@ -243,7 +415,12 @@ start	di
 
 //load souboru
 		ld hl,TXT7
-		ld bc,#0901
+		ld bc,(cursor)
+		ld c,#01
+		inc b
+		inc b
+		inc b
+	
 		ld (cursor),bc
 		call txy
 		ld hl,(main.path_back)	//zobrazi hledany nazev souboru
@@ -253,7 +430,10 @@ start	di
 		ld hl,TXT8
 		jr c,1F
 		ld hl,TXT9
-1		ld bc,#0B01
+1		ld bc,(cursor)
+		ld c,#01
+		inc b
+		inc b
 		ld (cursor),bc
 		push af
 		call txy
@@ -310,7 +490,10 @@ start	di
 
 //test cteni celeho souboru
 		ld hl,TXT11
-		ld bc,#0D01
+		ld bc,(cursor)
+		ld c,#01
+		inc b
+		inc b
 		ld (cursor),bc
 		call txy
 
@@ -447,7 +630,7 @@ count1	ld hl,0
 		ld bc,(cursor)
 		ld c,1
 		inc b
-		inc b
+		
 		ld (cursor),bc
 		push hl
 		ld hl,TXT15	
@@ -623,16 +806,7 @@ TEST1
 		inc b
 		inc b
 		inc b
-		inc b
-		ld (cursor),bc
-
-		ld hl,TXT23
-		call txy
-
-		ld bc,(cursor)
-		ld c,1
-		inc b
-		inc b
+		
 		ld (cursor),bc
 
 		ld hl,TXT22
@@ -651,20 +825,29 @@ TEST1
 		call txy
 		halt
 
-//erase FLASH
 1
+		ld hl,TXT23
+		call txy
+
+//erase FLASH
 		ld bc,(cursor)
 		ld c,1
 		inc b
 		inc b
 		ld (cursor),bc
 //WREN
-		sst_cs #81	 		//enable FLASH eLeMeNt
+		ld a,(device)
+		or #80
+		ld l,a
+		sst_cs l	 		//enable FLASH eLeMeNt/MB03+ #00-disable;#81-enable eLeMeNt;#82-enable MB03+
 		ld a,#06
 		out (sst_spi),a		//WREN-WriteEnable
 		sst_cs #80 	
 //WRSR
-		sst_cs #81	 		//enable FLASH eLeMeNt
+		ld a,(device)
+		or #80
+		ld l,a
+		sst_cs l	 		//enable FLASH eLeMeNt/MB03+ #00-disable;#81-enable eLeMeNt;#82-enable MB03+
 		ld a,#01
 		out (sst_spi),a		//WRSR-WriteConfigurationRegister
 		ld a,#0A			//WP#pins disable, NoMemoryBlock
@@ -672,17 +855,26 @@ TEST1
 		out (sst_spi),a		//ConfigurationByte	
 		sst_cs #80 
 //WREN
-		sst_cs #81	 		//enable FLASH eLeMeNt
+		ld a,(device)
+		or #80
+		ld l,a
+		sst_cs l	 		//enable FLASH eLeMeNt/MB03+ #00-disable;#81-enable eLeMeNt;#82-enable MB03+
 		ld a,#06
 		out (sst_spi),a		//WREN-WriteEnable
 		sst_cs #80 	
 //ULBPR
-		sst_cs #81	 		//enable FLASH eLeMeNt
+		ld a,(device)
+		or #80
+		ld l,a
+		sst_cs l	 		//enable FLASH eLeMeNt/MB03+ #00-disable;#81-enable eLeMeNt;#82-enable MB03+
 		ld a,#98
 		out (sst_spi),a		//ULBPR-GlobalBlockProtectionUnlock
 		sst_cs #80 
 //RDSR
-1		sst_cs #81	 		//enable FLASH eLeMeNt
+1		ld a,(device)
+		or #80
+		ld l,a
+		sst_cs l	 		//enable FLASH eLeMeNt/MB03+ #00-disable;#81-enable eLeMeNt;#82-enable MB03+
 		ld a,#05
 		out (sst_spi),a		//RDSR-ReadStatusRegister
 		in a,(sst_spi)		//Dummy byte
@@ -693,17 +885,26 @@ TEST1
 		and 128
 		jr nz,1B			//Busy 
 //WREN
-		sst_cs #81	 		//enable FLASH eLeMeNt
+		ld a,(device)
+		or #80
+		ld l,a
+		sst_cs l	 		//enable FLASH eLeMeNt/MB03+ #00-disable;#81-enable eLeMeNt;#82-enable MB03+
 		ld a,#06
 		out (sst_spi),a		//WREN-WriteEnable
 		sst_cs #80 			
 //CE-EraseFullArray		
-		sst_cs #81	 		//enable FLASH eLeMeNt
+		ld a,(device)
+		or #80
+		ld l,a
+		sst_cs l	 		//enable FLASH eLeMeNt/MB03+ #00-disable;#81-enable eLeMeNt;#82-enable MB03+
 		ld a,#C7
 		out (sst_spi),a		//CE-EraseFullArray
 		sst_cs #80
 //RDSR
-1		sst_cs #81	 		//enable FLASH eLeMeNt
+1		ld a,(device)
+		or #80
+		ld l,a
+		sst_cs l	 		//enable FLASH eLeMeNt/MB03+ #00-disable;#81-enable eLeMeNt;#82-enable MB03+
 		ld a,#05
 		out (sst_spi),a		//RDSR-ReadStatusRegister
 		in a,(sst_spi)		//Dummy byte
@@ -771,12 +972,18 @@ TEST1
 ;takže tady spracujeme nějak ty data na adrese mbuffer a o délce v registru BC.
 
 //WREN
-		sst_cs #81	 		//enable FLASH eLeMeNt
+		ld a,(device)
+		or #80
+		ld l,a
+		sst_cs l	 		//enable FLASH eLeMeNt/MB03+ #00-disable;#81-enable eLeMeNt;#82-enable MB03+
 		ld a,#06
 		out (sst_spi),a		//WREN-WriteEnable
 		sst_cs #80 	
 //PP-PageProgram	
-		sst_cs #81	 		//enable FLASH eLeMeNt
+		ld a,(device)
+		or #80
+		ld l,a
+		sst_cs l	 		//enable FLASH eLeMeNt/MB03+ #00-disable;#81-enable eLeMeNt;#82-enable MB03+
 		ld a,#02
 		out (sst_spi),a		//PP-PageProgram
 addrHL	ld hl,#0000
@@ -792,7 +999,10 @@ addrHL	ld hl,#0000
 		otir
 		sst_cs #80 
 //RDSR
-1		sst_cs #81	 		//enable FLASH eLeMeNt
+1		ld a,(device)
+		or #80
+		ld l,a
+		sst_cs l	 		//enable FLASH eLeMeNt/MB03+ #00-disable;#81-enable eLeMeNt;#82-enable MB03+
 		ld a,#05
 		out (sst_spi),a		//RDSR-ReadStatusRegister
 		in a,(sst_spi)		//Dummy byte
@@ -805,7 +1015,10 @@ addrHL	ld hl,#0000
 
 //Verify written bytes
 //READ
-		sst_cs #81	 		//enable FLASH eLeMeNt
+		ld a,(device)
+		or #80
+		ld l,a
+		sst_cs l	 		//enable FLASH eLeMeNt/MB03+ #00-disable;#81-enable eLeMeNt;#82-enable MB03+
 		ld a,#03
 		out (sst_spi),a		//Read memory
 		ld hl, (addrHL+1)
@@ -896,7 +1109,7 @@ count2	ld hl,0
 		ld bc,(cursor)
 		inc b
 		inc b
-		inc b
+		
 		ld c,1
 		ld (cursor),bc
 
@@ -1081,12 +1294,20 @@ HEX		cp 10
 		add a,7
 1		add a,48
 		jp xy
-
-TXT0 	dc 16,32+8," FPGA Core Update Utility v1.3 "
+MENU1	dc 16,07,"Select device for Core update:"
+MENU2	db "1 - ",16,66,"e",16,71,"L",16,70,"e",16,71,"M",16,68,"e",16,71,"N",16,69,"t" 
+		dc 16,71," ZX"
+MENU3	dc 16,07,"2 - MB03+ Ultimate"
+MENU4	dc 16,07,"Enter - autodetect"
+TXT0 	dc 16,32+8," FPGA Core Update Utility v1.6 "
 TXT1	db 16,66,"e",16,71,"L",16,70,"e",16,71,"M",16,68,"e",16,71,"N",16,69,"t" 
 		db 16,71," ZX"
-		dc 16,07," detected;"
-TXT2	dc 16,66,"no eLeMeNt ZX - none to flash!"
+		dc 16,07,"  detected;"
+mTXT1v3	db 16,70,"MB03+ Ultimate"
+		dc 16,07,"  detected;"
+mTXT1v4	db 16,70,"MB03+ Ultimate2"
+		dc 16,07,"  detected;"
+TXT2	dc 16,66,"no eLeMeNt ZX or MB03+ Ultimate - none to flash!"
 TXT3	dc "FLASH chip type: "
 TXT4	dc "SST26VF064 id:" //MB03+
 TXT5	dc "SST26VF032 id:" //eLeMeNt
@@ -1114,7 +1335,7 @@ TXT22	db 16,7,"Press '",16,68,"U",16,7,"' for update FPGA core."
 		dc " "		
 TXT23	dc 16,66,"Shutting down your machine will cause core corruption!"	
 TXT24	dc "Update canceled. Come back anytime. LMN128"
-TXT25	dc "Erase Flash completed"
+TXT25	dc 16,07,"Erase Flash completed"
 TXT26	dc "Programing Flash: #"
 TXT27	dc 16,68,"FPGA core update successfully completed"
 TXT27a	dc 16,7,"Power cycle (off/on) machine to apply updated core, please."
@@ -1122,6 +1343,10 @@ TXT28	dc "00"
 TXT29	dc 16,02,"Verify error! Something is wrong, try to use PC update utility"
 
 TEXT99	dc 16,5,"LMN128"
+ERROR0  db 16,66,"something is wrong, contact your system administrator"
+
+device  db 0 //0=none 1=element; 2=MB03+
+board	db 0 //MB03+: 3=v3;4=v4 element not used
 
 
 //znaky

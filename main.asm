@@ -109,6 +109,8 @@ FileLen	defb	#3A,#15,#49	//4789;Délka souboru (3 bajtová)
 fileID	defb	0	;Kanál (ID) souboru
 path	defb	"el_au.bit",0
 path2	defb	"el_au_p.bit",0
+path3	defb	"mb_ut_1.bit",0
+path4	defb	"mb_ut_2.bit",0
 path_back defw 0
 mbuffer	ds	#0200	;adresa bufferu pro ukládání dat/512Bytes
 read_buffer	ds	#0200	;adresa bufferu pro verify dat/512Bytes
