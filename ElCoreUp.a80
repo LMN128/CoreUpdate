@@ -1187,9 +1187,15 @@ xy		and	a
 		pop bc		
 		inc de
 		djnz 2B
-		ld	bc,(cursor)
+		ld	bc,(cursor)			//posuneme kurzor a pripadne zaradkuji
 		inc c
-		ld	(cursor),bc
+		ld a,c
+		cp 64
+		jr nz,3F
+		inc b
+		inc b
+		ld c,#01				//01 jen pro ucel tohoto programu, jinak by se melo pouzit 00	
+3		ld	(cursor),bc
 		ret
 	
 COLOR	push af
@@ -1299,7 +1305,7 @@ MENU2	db "1 - ",16,66,"e",16,71,"L",16,70,"e",16,71,"M",16,68,"e",16,71,"N",16,6
 		dc 16,71," ZX"
 MENU3	dc 16,07,"2 - MB03+ Ultimate"
 MENU4	dc 16,07,"Enter - autodetect"
-TXT0 	dc 16,32+8," FPGA Core Update Utility v1.6 "
+TXT0 	dc 16,32+8," FPGA Core Update Utility v1.7 "
 TXT1	db 16,66,"e",16,71,"L",16,70,"e",16,71,"M",16,68,"e",16,71,"N",16,69,"t" 
 		db 16,71," ZX"
 		dc 16,07,"  detected;"
@@ -1331,7 +1337,7 @@ TXT21	dc "; board: "
 TXT21a	dc "Au"	
 TXT21b	dc "Au+"
 TXT21c	dc 16,02,"unknown"
-TXT22	db 16,7,"Press '",16,68,"U",16,7,"' for update FPGA core."
+TXT22	db 16,7,"Press uppercase '",16,68,"U",16,7,"' for update FPGA core."
 		dc " "		
 TXT23	dc 16,66,"Shutting down your machine will cause core corruption!"	
 TXT24	dc "Update canceled. Come back anytime. LMN128"
